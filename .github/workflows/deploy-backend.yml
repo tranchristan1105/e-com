@@ -11,6 +11,7 @@ env:
   REGION: ${{ secrets.GCP_REGION }}
   REPO_NAME: ecommerce-repo
   SERVICE_NAME: ecommerce-backend
+  
 
 jobs:
   deploy:
@@ -45,7 +46,9 @@ jobs:
         # Variables d'environnement pour la connexion DB
         env_vars: |
           DATABASE_URL=postgresql+psycopg2://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@/${{ secrets.DB_NAME }}?host=/cloudsql/${{ secrets.DB_CONNECTION_NAME }}
-        # Connexion au Cloud SQL
+          STRIPE_API_KEY=${{ secrets.STRIPE_API_KEY }}
+          FRONTEND_URL=https://ecommerce-frontend-810577747496.europe-west9.run.app
+        #Connexion au Cloud SQL
         flags: |
           --add-cloudsql-instances=${{ secrets.DB_CONNECTION_NAME }}
           --allow-unauthenticated
