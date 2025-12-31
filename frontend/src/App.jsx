@@ -10,7 +10,7 @@ import ProductPage from './pages/ProductPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import SuccessPage from './pages/SuccessPage.jsx';
 import CancelPage from './pages/CancelPage.jsx';
-
+//trig
 export default function App() {
   return (
     <CartProvider>
