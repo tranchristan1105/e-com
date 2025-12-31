@@ -18,6 +18,13 @@ stripe.api_key = os.getenv("STRIPE_API_KEY")
 # En production, on définira la variable d'environnement FRONTEND_URL dans Cloud Run.
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
+if not stripe.api_key:
+    print("❌ ERREUR CRITIQUE : La clé Stripe (STRIPE_API_KEY) est vide ou manquante !")
+else:
+    # On affiche juste les 4 premiers caractères pour vérifier (sans tout révéler)
+    print(f"✅ Clé Stripe chargée : {stripe.api_key[:4]}...****")
+
+print(f"✅ Frontend URL : {FRONTEND_URL}")
 from app.core.database import engine, Base, get_db
 from app.models.product import Product as ProductModel, AnalyticsEvent as EventModel
 

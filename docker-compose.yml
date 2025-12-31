@@ -1,33 +1,38 @@
 version: '3.8'
+
 services:
-  # 1. Le Backend (Python API)
   backend:
     build: 
-      context: ./backend  # Il va chercher le Dockerfile dans le dossier backend
+      context: ./backend
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
-      - ./backend:/app    # Synchronise votre code en temps réel (Hot Reload)
+      - ./backend:/app
     ports:
       - "8000:8000"
+    
+    # CHARGEMENT DES VARIABLES DEPUIS LE FICHIER .env
+    env_file:
+      - .env
+    
+    # On garde juste la connexion DB ici si elle n'est pas dans le .env
     environment:
       - DATABASE_URL=postgresql://user:password@db:5432/ecommerce_db
+      # On a retiré STRIPE_API_KEY d'ici pour laisser faire le env_file
+    
     depends_on:
       - db
 
-  # 2. Le Frontend (React)
   frontend:
     build:
-      context: ./frontend # Il va chercher le Dockerfile dans le dossier frontend
+      context: ./frontend
     volumes:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "5173:5173"       # Port par défaut de Vite
+      - "5173:5173"
     environment:
-      - VITE_API_URL=http://localhost:8000
-    # Note: Pour que cela fonctionne, il faut ajouter un Dockerfile simple dans frontend/ (voir ci-dessous)
+      - VITE_API_URL=http://localhost:8000/api/v1
 
-  # 3. La Base de données (PostgreSQL)
   db:
     image: postgres:15-alpine
     volumes:
