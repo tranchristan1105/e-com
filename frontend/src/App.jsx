@@ -3,19 +3,20 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 
-// Import des modules avec extensions explicites .jsx (Nécessaire ici)
-import { CartProvider } from './context/CartContext.jsx';
-import Navbar from './components/Navbar.jsx';
-import CartPanel from './components/CartPanel.jsx';
-import HomePage from './pages/HomePage.jsx';
-import ProductPage from './pages/ProductPage.jsx';
-import DashboardPage from './pages/DashboardPage.jsx';
-import SuccessPage from './pages/SuccessPage.jsx';
-import CancelPage from './pages/CancelPage.jsx';
+// Import des modules (Correction : Retrait des extensions pour la résolution standard)
+import { CartProvider } from './context/CartContext';
+import { MarketingPixels } from './components/MarketingPixels';
+import Navbar from './components/Navbar';
+import CartPanel from './components/CartPanel';
+import HomePage from './pages/HomePage';
+import ProductPage from './pages/ProductPage';
+import DashboardPage from './pages/DashboardPage';
+import SuccessPage from './pages/SuccessPage';
+import CancelPage from './pages/CancelPage';
 
 // Composant Bandeau Promo
 const PromoBanner = () => {
-  const [isVisible, setIsVisible] = useState(true);
+  const [isVisible, setIsVisible] = useState(false);
   if (!isVisible) return null;
   
   return (
@@ -37,27 +38,19 @@ export default function App() {
   return (
     <CartProvider>
       <Router>
+        {/* On injecte les pixels ici pour qu'ils aient accès au Router */}
+        <MarketingPixels />
+        
         <div className="min-h-screen bg-white text-gray-800 font-sans selection:bg-blue-100 flex flex-col">
-          {/* Le Toaster peut être placé n'importe où */}
           <Toaster 
             position="bottom-center"
             toastOptions={{
-              style: {
-                background: '#333',
-                color: '#fff',
-                borderRadius: '10px',
-              },
-              success: {
-                iconTheme: {
-                  primary: '#22c55e',
-                  secondary: 'white',
-                },
-              },
+              style: { background: '#333', color: '#fff', borderRadius: '10px' },
+              success: { iconTheme: { primary: '#22c55e', secondary: 'white' } },
             }}
           />
           
           <PromoBanner />
-          
           <Navbar />
           <CartPanel />
           

@@ -1,151 +1,211 @@
 import React, { useEffect, useState } from 'react';
-import { BarChart3, Users, MousePointer, ShoppingBag, ArrowLeft, Trophy, ArrowDown } from 'lucide-react';
+import { BarChart3, Users, MousePointer, ShoppingBag, ArrowLeft, Trophy, ArrowDown, Package, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-// --- CORRECTION ICI ---
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+// Gestion sécurisée de l'URL API
+let apiUrl = "http://localhost:8000/api/v1";
+try {
+  if (import.meta && import.meta.env && import.meta.env.VITE_API_URL) {
+    apiUrl = import.meta.env.VITE_API_URL;
+  }
+} catch (e) {}
+const API_URL = apiUrl;
 
 const DashboardPage = () => {
   const [stats, setStats] = useState(null);
+  const [orders, setOrders] = useState([]); // <--- NOUVEAU
+  const [activeTab, setActiveTab] = useState('analytics'); // analytics | orders
   const [loading, setLoading] = useState(true);
 
-  const fetchStats = () => {
-    fetch(`${API_URL}/analytics/stats`)
-      .then(res => res.json())
-      .then(data => setStats(data))
-      .catch(err => console.error(err))
-      .finally(() => setLoading(false));
+  const fetchData = async () => {
+    try {
+        const [statsRes, ordersRes] = await Promise.all([
+            fetch(`${API_URL}/analytics/stats`),
+            fetch(`${API_URL}/orders`)
+        ]);
+        
+        setStats(await statsRes.json());
+        setOrders(await ordersRes.json());
+    } catch (e) {
+        console.error(e);
+    } finally {
+        setLoading(false);
+    }
   };
 
   useEffect(() => {
-    fetchStats();
-    const interval = setInterval(fetchStats, 5000);
+    fetchData();
+    const interval = setInterval(fetchData, 10000); // Update toutes les 10s
     return () => clearInterval(interval);
   }, []);
 
-  if (loading) return <div className="p-10 text-center">Chargement des données...</div>;
-  if (!stats) return <div className="p-10 text-center text-red-500">Erreur de chargement API</div>;
+  if (loading) return <div className="p-10 text-center">Chargement du QG...</div>;
+  if (!stats) return <div className="p-10 text-center text-red-500">Erreur Connexion</div>;
 
   const { summary, recent_logs } = stats;
   const maxProductCount = Math.max(...Object.values(summary.top_products || {0:0}), 1);
 
-  // --- CALCULS DU TUNNEL ---
-  const funnel = summary.funnel || { "1_visitors": 0, "2_interested": 0, "3_converted": 0 };
-  const visitors = funnel["1_visitors"];
-  const interested = funnel["2_interested"];
-  const converted = funnel["3_converted"];
-
-  const conversionRate1 = visitors > 0 ? Math.round((interested / visitors) * 100) : 0;
-  const conversionRate2 = interested > 0 ? Math.round((converted / interested) * 100) : 0;
-
   return (
-    <div className="min-h-screen bg-slate-50 p-8">
+    <div className="min-h-screen bg-slate-50 p-8 font-sans">
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
+        
+        {/* HEADER */}
+        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">Dashboard Analytics</h1>
-            <p className="text-slate-500">Suivi en temps réel de l'activité utilisateur</p>
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Empire Dashboard</h1>
+            <p className="text-slate-500">Vue d'ensemble de votre activité e-commerce.</p>
           </div>
-          <Link to="/" className="flex items-center text-blue-600 hover:text-blue-800 font-medium">
-            <ArrowLeft size={20} className="mr-2" /> Retour au site
-          </Link>
+          <div className="flex gap-4">
+             <div className="bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm text-sm">
+                <span className="text-slate-400 mr-2">Chiffre d'Affaires</span>
+                <span className="font-bold text-green-600 text-lg">{summary.total_sales || 0} €</span>
+             </div>
+             <Link to="/" className="flex items-center text-blue-600 hover:text-blue-800 font-medium bg-blue-50 px-4 py-2 rounded-lg transition-colors">
+                <ArrowLeft size={18} className="mr-2" /> Retour Boutique
+             </Link>
+          </div>
         </div>
 
-        {/* TUNNEL DE VENTE */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-8 mb-8">
-            <h2 className="text-xl font-bold text-slate-800 mb-8 flex items-center gap-2">
-                <Users className="text-blue-500" />
-                Tunnel de Conversion
-            </h2>
-            
-            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                
-                <div className="flex-1 w-full text-center p-6 bg-blue-50 rounded-2xl border-2 border-blue-100 relative group hover:border-blue-300 transition-all">
-                    <div className="text-sm font-bold text-blue-400 uppercase tracking-wide mb-2">Visiteurs (Accueil)</div>
-                    <div className="text-4xl font-extrabold text-blue-700">{visitors}</div>
-                    <div className="text-xs text-blue-400 mt-1">Personnes uniques</div>
-                </div>
-
-                <div className="flex flex-col items-center justify-center shrink-0 z-10">
-                    <div className="bg-slate-100 px-3 py-1 rounded-full text-xs font-bold text-slate-500 mb-2 shadow-sm whitespace-nowrap">{conversionRate1}% retention</div>
-                    <ArrowDown className="text-slate-300 rotate-0 md:-rotate-90" size={32} />
-                </div>
-
-                <div className="flex-1 w-full text-center p-6 bg-purple-50 rounded-2xl border-2 border-purple-100 relative group hover:border-purple-300 transition-all">
-                    <div className="text-sm font-bold text-purple-400 uppercase tracking-wide mb-2">Intéressés (Produits)</div>
-                    <div className="text-4xl font-extrabold text-purple-700">{interested}</div>
-                    <div className="text-xs text-purple-400 mt-1">Clics sur fiche produit</div>
-                </div>
-
-                <div className="flex flex-col items-center justify-center shrink-0 z-10">
-                    <div className="bg-slate-100 px-3 py-1 rounded-full text-xs font-bold text-slate-500 mb-2 shadow-sm whitespace-nowrap">{conversionRate2}% conversion</div>
-                    <ArrowDown className="text-slate-300 rotate-0 md:-rotate-90" size={32} />
-                </div>
-
-                <div className="flex-1 w-full text-center p-6 bg-green-50 rounded-2xl border-2 border-green-100 relative group hover:border-green-300 transition-all shadow-lg shadow-green-100/50">
-                    <div className="text-sm font-bold text-green-500 uppercase tracking-wide mb-2">Convertis (Panier)</div>
-                    <div className="text-5xl font-extrabold text-green-700">{converted}</div>
-                    <div className="text-xs text-green-500 mt-1">Futurs clients</div>
-                </div>
-
-            </div>
+        {/* ONGLETS */}
+        <div className="flex gap-4 mb-8 border-b border-slate-200">
+            <button 
+                onClick={() => setActiveTab('analytics')}
+                className={`pb-3 px-2 font-semibold text-sm transition-all ${activeTab === 'analytics' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+                Analytics & Trafic
+            </button>
+            <button 
+                onClick={() => setActiveTab('orders')}
+                className={`pb-3 px-2 font-semibold text-sm transition-all ${activeTab === 'orders' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+                Commandes ({orders.length})
+            </button>
         </div>
 
-        {/* RESTE DU DASHBOARD */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <StatCard title="Total Interactions" value={summary.total_events} icon={<BarChart3 size={24} />} color="blue" />
-          <StatCard title="Vues Produits" value={summary.breakdown.view_item || 0} icon={<MousePointer size={24} />} color="purple" />
-          <StatCard title="Ajouts Panier" value={summary.breakdown.add_to_cart || 0} icon={<ShoppingBag size={24} />} color="green" />
-          <StatCard title="Vues Accueil" value={summary.breakdown.page_view || 0} icon={<Users size={24} />} color="orange" />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-                <div className="flex items-center gap-2 mb-6">
-                    <Trophy className="text-yellow-500" size={20} />
-                    <h2 className="text-lg font-bold text-slate-800">Top Produits</h2>
+        {/* CONTENU - ONGLET ANALYTICS */}
+        {activeTab === 'analytics' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {/* KPIs */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    <StatCard title="Vues Totales" value={summary.total_events} icon={<BarChart3 size={24} />} color="blue" />
+                    <StatCard title="Intérêt Produits" value={summary.breakdown.view_item || 0} icon={<MousePointer size={24} />} color="purple" />
+                    <StatCard title="Ajouts Panier" value={summary.breakdown.add_to_cart || 0} icon={<ShoppingBag size={24} />} color="green" />
+                    <StatCard title="Vues Accueil" value={summary.breakdown.page_view || 0} icon={<Users size={24} />} color="orange" />
                 </div>
-                <div className="space-y-5">
-                    {Object.entries(summary.top_products || {}).map(([name, count], index) => (
-                        <div key={name}>
-                            <div className="flex justify-between items-center text-sm mb-1.5">
-                                <div className="flex items-center gap-2">
-                                    <span className={`w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold ${index === 0 ? 'bg-yellow-100 text-yellow-700' : index === 1 ? 'bg-slate-200 text-slate-700' : 'text-slate-400'}`}>{index + 1}</span>
-                                    <span className="font-medium text-slate-700 truncate max-w-[150px]">{name}</span>
-                                </div>
-                                <span className="text-slate-500 font-mono bg-slate-50 px-2 py-0.5 rounded">{count} vues</span>
-                            </div>
-                            <div className="w-full bg-slate-100 rounded-full h-2">
-                                <div className={`h-2 rounded-full transition-all duration-500 ${index === 0 ? 'bg-yellow-500' : 'bg-blue-500'}`} style={{ width: `${(count / maxProductCount) * 100}%` }}></div>
-                            </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Top Produits */}
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+                        <div className="flex items-center gap-2 mb-6">
+                            <Trophy className="text-yellow-500" size={20} />
+                            <h2 className="text-lg font-bold text-slate-800">Top Produits</h2>
                         </div>
-                    ))}
-                </div>
-            </div>
+                        <div className="space-y-5">
+                            {Object.entries(summary.top_products || {}).map(([name, count], index) => (
+                                <div key={name}>
+                                    <div className="flex justify-between items-center text-sm mb-1.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className={`w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold ${index === 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-slate-100 text-slate-500'}`}>{index + 1}</span>
+                                            <span className="font-medium text-slate-700 truncate max-w-[150px]">{name}</span>
+                                        </div>
+                                        <span className="text-slate-500 font-mono bg-slate-50 px-2 py-0.5 rounded">{count}</span>
+                                    </div>
+                                    <div className="w-full bg-slate-100 rounded-full h-1.5">
+                                        <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${(count / maxProductCount) * 100}%` }}></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
 
-            <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-                    <h2 className="text-lg font-bold text-slate-800">Activités Récentes</h2>
-                    <div className="flex items-center gap-1 text-xs text-green-600 font-medium animate-pulse"><span className="w-2 h-2 bg-green-500 rounded-full"></span> Live</div>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-slate-600">
-                    <thead className="bg-slate-50 text-slate-900 font-semibold">
-                        <tr><th className="px-6 py-3">Action</th><th className="px-6 py-3">Page / Produit</th><th className="px-6 py-3">Heure</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {recent_logs.map((log, i) => (
-                        <tr key={i} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-6 py-3"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${log.event_type === 'add_to_cart' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{log.event_type}</span></td>
-                            <td className="px-6 py-3 text-slate-600 truncate max-w-xs font-medium">{log.page_url.replace('/product/', 'Produit #')}</td>
-                            <td className="px-6 py-3 text-slate-400">{new Date(log.created_at).toLocaleTimeString()}</td>
-                        </tr>
-                        ))}
-                    </tbody>
-                    </table>
+                    {/* Logs */}
+                    <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-100"><h2 className="text-lg font-bold text-slate-800">Activités Récentes</h2></div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm text-slate-600">
+                                <thead className="bg-slate-50 text-slate-900 font-semibold"><tr><th className="px-6 py-3">Action</th><th className="px-6 py-3">Détail</th><th className="px-6 py-3">Heure</th></tr></thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {recent_logs.map((log, i) => (
+                                    <tr key={i} className="hover:bg-slate-50">
+                                        <td className="px-6 py-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${log.event_type === 'add_to_cart' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>{log.event_type}</span></td>
+                                        <td className="px-6 py-3 truncate max-w-xs">{log.page_url}</td>
+                                        <td className="px-6 py-3 text-slate-400">{new Date(log.created_at).toLocaleTimeString()}</td>
+                                    </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
+        )}
+
+        {/* CONTENU - ONGLET COMMANDES (NOUVEAU) */}
+        {activeTab === 'orders' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {orders.length === 0 ? (
+                    <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-300">
+                        <Package size={48} className="mx-auto text-slate-300 mb-4" />
+                        <p className="text-slate-500 text-lg">Aucune commande pour le moment.</p>
+                        <p className="text-sm text-slate-400">Patience, l'empire se construit brique par brique.</p>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {orders.map((order) => (
+                            <div key={order.id} className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 pb-6 border-b border-slate-100 gap-4">
+                                    <div>
+                                        <div className="flex items-center gap-3 mb-1">
+                                            <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">Payé</span>
+                                            <h3 className="font-bold text-slate-900 text-lg">Commande #{order.id}</h3>
+                                        </div>
+                                        <p className="text-slate-500 text-sm flex items-center gap-2">
+                                            <span>{new Date(order.date).toLocaleString()}</span>
+                                            <span>•</span>
+                                            <span className="font-medium text-slate-700">{order.email}</span>
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-2xl font-extrabold text-slate-900">{order.amount} €</p>
+                                        <p className="text-xs text-slate-400">Via Stripe</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    {/* Produits */}
+                                    <div>
+                                        <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2"><Package size={16} /> Produits</h4>
+                                        <ul className="space-y-2">
+                                            {JSON.parse(order.items || "[]").map((item, idx) => (
+                                                <li key={idx} className="text-sm text-slate-600 bg-slate-50 px-3 py-2 rounded border border-slate-100">
+                                                    {item}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                    
+                                    {/* Livraison */}
+                                    <div>
+                                        <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2"><MapPin size={16} /> Livraison</h4>
+                                        <div className="text-sm text-slate-600 bg-slate-50 px-3 py-2 rounded border border-slate-100">
+                                            <p className="font-bold">{order.customer}</p>
+                                            {order.address && (
+                                                <>
+                                                    <p>{order.address.line1}</p>
+                                                    <p>{order.address.postal_code} {order.address.city}</p>
+                                                    <p>{order.address.country}</p>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        )}
+
       </div>
     </div>
   );

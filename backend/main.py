@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -9,22 +9,21 @@ import time
 import stripe
 import os
 
-# --- CONFIGURATION & DEBUG ---
+# --- CONFIGURATION ---
 stripe.api_key = os.getenv("STRIPE_API_KEY")
+# Secret de signature Webhook (A récupérer dans le dashboard Stripe > Webhooks)
+# Pour le test local, on peut le laisser vide ou utiliser celui du CLI Stripe
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "") 
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
-print(frontend_url)
-# Vérification au démarrage
-if not stripe.api_key:
-    print("❌ ERREUR CRITIQUE : La clé Stripe (STRIPE_API_KEY) est vide ou manquante !")
-else:
-    print(f"✅ Clé Stripe chargée : {stripe.api_key[:4]}...****")
 
-print(f"✅ Frontend URL : {frontend_url}")
+# Vérification Debug
+if not stripe.api_key:
+    print("❌ ERREUR : Clé Stripe manquante !")
 
 from app.core.database import engine, Base, get_db
-from app.models.product import Product as ProductModel, AnalyticsEvent as EventModel
+from app.models.product import Product as ProductModel, AnalyticsEvent as EventModel, Order as OrderModel
 
-# --- Init DB ---
+# Init DB
 while True:
     try:
         Base.metadata.create_all(bind=engine)
@@ -44,7 +43,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Schemas ---
+# --- SCHEMAS ---
 class ProductSchema(BaseModel):
     id: int
     name: str
@@ -52,6 +51,18 @@ class ProductSchema(BaseModel):
     category: str
     image_url: str
     description: Optional[str] = None
+    class Config:
+        from_attributes = True
+
+class OrderSchema(BaseModel):
+    id: int
+    stripe_id: str
+    customer_email: str
+    total_amount: float
+    status: str
+    created_at: str
+    # On ne renvoie pas tout le détail JSON pour la liste légère, à voir si besoin
+    
     class Config:
         from_attributes = True
 
@@ -70,56 +81,38 @@ class CartItem(BaseModel):
 class CheckoutSchema(BaseModel):
     items: List[CartItem]
 
-# --- Routes ---
-@app.get("/")
-def read_root():
-    return {"status": "online", "mode": "millionaire"}
+# --- ROUTES PUBLIQUES ---
+
+@app.get("/api/v1/products", response_model=List[ProductSchema])
+def get_products(q: Optional[str] = None, category: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(ProductModel)
+    if q:
+        search = f"%{q}%"
+        query = query.filter((ProductModel.name.ilike(search)) | (ProductModel.description.ilike(search)))
+    if category and category != "Tout":
+        query = query.filter(ProductModel.category == category)
+    return query.all()
 
 @app.get("/api/v1/products/{product_id}", response_model=ProductSchema)
 def get_product(product_id: int, db: Session = Depends(get_db)):
     product = db.query(ProductModel).filter(ProductModel.id == product_id).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="Produit non trouvé")
+    if not product: raise HTTPException(status_code=404, detail="Produit non trouvé")
     return product
-
-# --- CORRECTION ICI : RESTAURATION DES FILTRES ---
-@app.get("/api/v1/products", response_model=List[ProductSchema])
-def get_products(
-    q: Optional[str] = None, 
-    category: Optional[str] = None, 
-    db: Session = Depends(get_db)
-):
-    query = db.query(ProductModel)
-    
-    # Filtre par texte (nom ou description)
-    if q:
-        search = f"%{q}%"
-        query = query.filter(
-            (ProductModel.name.ilike(search)) | 
-            (ProductModel.description.ilike(search))
-        )
-    
-    # Filtre par catégorie
-    if category and category != "Tout":
-        query = query.filter(ProductModel.category == category)
-        
-    return query.all()
 
 @app.post("/api/v1/analytics")
 def track_event(event: AnalyticsSchema, db: Session = Depends(get_db)):
     try:
-        metadata_str = json.dumps(event.metadata)
-        db_event = EventModel(
+        db.add(EventModel(
             event_type=event.event_type,
             user_id=event.user_id,
             page_url=event.page_url,
-            metadata_json=metadata_str
-        )
-        db.add(db_event)
+            metadata_json=json.dumps(event.metadata)
+        ))
         db.commit()
         return {"status": "recorded"}
-    except Exception as e:
-        return {"status": "error", "detail": str(e)}
+    except Exception as e: return {"status": "error", "detail": str(e)}
+
+# --- ROUTES ADMIN / DASHBOARD ---
 
 @app.get("/api/v1/analytics/stats")
 def get_analytics_stats(db: Session = Depends(get_db)):
@@ -127,48 +120,86 @@ def get_analytics_stats(db: Session = Depends(get_db)):
     stats_query = db.query(EventModel.event_type, func.count(EventModel.event_type)).group_by(EventModel.event_type).all()
     stats_by_type = {type_: count for type_, count in stats_query}
 
+    # Top Produits
     product_events = db.query(EventModel).filter(EventModel.event_type.in_(['view_item', 'add_to_cart'])).all()
     product_counts = {}
     for event in product_events:
         try:
             data = json.loads(event.metadata_json)
             name = data.get('name', 'Inconnu')
-            if name and name != 'Inconnu':
-                product_counts[name] = product_counts.get(name, 0) + 1
-        except:
-            continue
+            if name and name != 'Inconnu': product_counts[name] = product_counts.get(name, 0) + 1
+        except: continue
     sorted_products = dict(sorted(product_counts.items(), key=lambda item: item[1], reverse=True)[:10])
 
-    step_1 = stats_by_type.get('page_view', 0)
-    step_2 = stats_by_type.get('view_item', 0)
-    step_3 = stats_by_type.get('add_to_cart', 0)
-    funnel_data = {"1_visitors": step_1, "2_interested": step_2, "3_converted": step_3}
+    # Funnel
+    funnel_data = {
+        "1_visitors": stats_by_type.get('page_view', 0),
+        "2_interested": stats_by_type.get('view_item', 0),
+        "3_converted": stats_by_type.get('add_to_cart', 0)
+    }
+    
+    # CHIFFRE D'AFFAIRES (Nouveau !)
+    total_sales = db.query(func.sum(OrderModel.total_amount)).scalar() or 0.0
+    orders_count = db.query(OrderModel).count()
 
     recent_logs = db.query(EventModel).order_by(EventModel.created_at.desc()).limit(20).all()
     
     return {
-        "summary": {"total_events": total, "breakdown": stats_by_type, "top_products": sorted_products, "funnel": funnel_data},
+        "summary": {
+            "total_events": total,
+            "total_sales": total_sales, # <--- CA Total
+            "total_orders": orders_count, # <--- Nombre Commandes
+            "breakdown": stats_by_type,
+            "top_products": sorted_products,
+            "funnel": funnel_data
+        },
         "recent_logs": recent_logs
     }
 
-# --- ROUTE DE PAIEMENT (STRIPE) ---
+# Route pour lister les commandes dans le dashboard
+@app.get("/api/v1/orders")
+def get_orders(db: Session = Depends(get_db)):
+    # On récupère les 50 dernières commandes
+    orders = db.query(OrderModel).order_by(OrderModel.created_at.desc()).limit(50).all()
+    
+    # On prépare une réponse propre avec le JSON parsé pour le frontend
+    result = []
+    for o in orders:
+        try:
+            items = json.loads(o.items_json)
+            address = json.loads(o.shipping_address_json)
+        except:
+            items = []
+            address = {}
+            
+        result.append({
+            "id": o.id,
+            "stripe_id": o.stripe_id,
+            "customer": o.customer_name,
+            "email": o.customer_email,
+            "amount": o.total_amount,
+            "status": o.status,
+            "date": o.created_at,
+            "items": items,
+            "address": address
+        })
+    return result
+
+# --- PAIEMENT ---
+
 @app.post("/api/v1/create-checkout-session")
 def create_checkout_session(cart: CheckoutSchema):
     try:
-        if not stripe.api_key:
-             raise Exception("Clé Stripe non configurée !")
-
-        # --- CORRECTION ICI : ON RELIT LA VARIABLE AU MOMENT DU PAIEMENT ---
-        # On ne fait pas confiance à la variable globale, on va la chercher à la source
-        current_frontend_url = os.getenv("FRONTEND_URL")
+        if not stripe.api_key: raise Exception("Clé Stripe manquante")
         
-        # On enlève le slash à la fin s'il y en a un pour éviter les doubles //
-        if current_frontend_url.endswith('/'):
-            current_frontend_url = current_frontend_url[:-1]
-
-        print(f"💰 Création session Stripe. Redirection prévue vers : {current_frontend_url}")
+        c_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        if c_url.endswith('/'): c_url = c_url[:-1]
 
         line_items = []
+        # On crée une liste de métadonnées pour savoir ce qu'il y a dans la commande
+        # (Stripe limite la taille des métadonnées, on fait simple ici)
+        summary_items = [] 
+        
         for item in cart.items:
             line_items.append({
                 'price_data': {
@@ -178,44 +209,87 @@ def create_checkout_session(cart: CheckoutSchema):
                 },
                 'quantity': 1,
             })
+            summary_items.append(f"{item.name} ({item.price}€)")
 
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=line_items,
             mode='payment',
-            # On utilise la variable locale fraîchement lue
-            success_url=f'{current_frontend_url}/success?session_id={{CHECKOUT_SESSION_ID}}',
-            cancel_url=f'{current_frontend_url}/cancel',
+            success_url=f'{c_url}/success?session_id={{CHECKOUT_SESSION_ID}}',
+            cancel_url=f'{c_url}/cancel',
+            # On demande l'adresse de livraison et de facturation
+            shipping_address_collection={"allowed_countries": ["FR", "BE", "CH", "CA"]},
+            metadata={
+                "items_summary": json.dumps(summary_items) # Pour retrouver les produits plus tard
+            }
         )
-        
         return {"checkout_url": checkout_session.url}
     except Exception as e:
         print(f"Stripe Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+# --- WEBHOOK (Le Listener Automatique) ---
+@app.post("/api/v1/webhook")
+async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+    payload = await request.body()
+    sig_header = request.headers.get('stripe-signature')
+
+    try:
+        # En prod, on vérifie la signature pour la sécurité
+        # En dev local sans CLI, on bypass souvent cette étape ou on utilise un secret de test
+        if STRIPE_WEBHOOK_SECRET:
+            event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+        else:
+            # Mode "confiance" pour le dev simple (attention sécurité en prod)
+            event = json.loads(payload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="Invalid payload")
+    except stripe.error.SignatureVerificationError as e:
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    # Si le paiement est réussi
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        
+        # Extraction des données
+        stripe_id = session.get('id')
+        amount = session.get('amount_total', 0) / 100
+        customer_details = session.get('customer_details', {})
+        shipping = session.get('shipping_details', {}) or {}
+        
+        # Récupération des articles depuis les métadonnées (stockées lors du checkout)
+        items_json = session.get('metadata', {}).get('items_summary', '[]')
+        
+        # Sauvegarde en DB
+        new_order = OrderModel(
+            stripe_id=stripe_id,
+            customer_email=customer_details.get('email'),
+            customer_name=customer_details.get('name'),
+            total_amount=amount,
+            status="paid",
+            items_json=items_json,
+            shipping_address_json=json.dumps(shipping.get('address', {}))
+        )
+        db.add(new_order)
+        db.commit()
+        print(f"💰 Commande enregistrée : {amount}€ par {customer_details.get('email')}")
+
+    return {"status": "success"}
+
 @app.post("/api/v1/seed")
 def seed_database(db: Session = Depends(get_db)):
     db.query(ProductModel).delete()
+    # (Tes produits habituels ici...)
     products = [
-        ProductModel(name="iPhone 15 Pro", price=1299.0, category="Smartphone", image_url="https://images.unsplash.com/photo-1696446701796-da61225697cc?q=80&w=800&auto=format&fit=crop", description="Le titane rencontre la puissance."),
-        ProductModel(name="MacBook Air M2", price=1499.0, category="Ordinateur", image_url="https://images.unsplash.com/photo-1517336714731-489689fd1ca4?q=80&w=800&auto=format&fit=crop", description="Incroyablement fin."),
-        ProductModel(name="Sony WH-1000XM5", price=349.0, category="Audio", image_url="https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?q=80&w=800&auto=format&fit=crop", description="Réduction de bruit."),
-        ProductModel(name="Café de Spécialité", price=19.90, category="Lifestyle", image_url="https://images.unsplash.com/photo-1559056199-641a0ac8b55e?q=80&w=800&auto=format&fit=crop", description="Grains 100% Arabica."),
-        ProductModel(name="Montre Connectée", price=299.0, category="Wearable", image_url="https://images.unsplash.com/photo-1579586337278-3befd40fd17a?q=80&w=800&auto=format&fit=crop", description="Santé et sport."),
+        ProductModel(name="iPhone 15 Pro", price=1299.0, category="Smartphone", image_url="https://images.unsplash.com/photo-1696446701796-da61225697cc?w=800", description="Le titane rencontre la puissance."),
+        ProductModel(name="MacBook Air M2", price=1499.0, category="Ordinateur", image_url="https://images.unsplash.com/photo-1517336714731-489689fd1ca4?w=800", description="Incroyablement fin."),
+        ProductModel(name="Sony WH-1000XM5", price=349.0, category="Audio", image_url="https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?w=800", description="Réduction de bruit."),
+        ProductModel(name="Café de Spécialité", price=19.90, category="Lifestyle", image_url="https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=800", description="Grains 100% Arabica."),
+        ProductModel(name="Montre Connectée", price=299.0, category="Wearable", image_url="https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=800", description="Santé et sport."),
     ]
     db.add_all(products)
     db.commit()
-    return {"message": "Base de données mise à jour !"}
-
-@app.get("/api/v1/debug-config")
-def debug_config():
-    """Route secrète pour vérifier la configuration en production"""
-    return {
-        "frontend_url_detected": os.getenv("FRONTEND_URL"),
-        "frontend_url_default": "http://localhost:5173",
-        "final_url_used": frontend_url,
-        "stripe_key_masked": stripe.api_key[:8] + "..." if stripe.api_key else "None"
-    }
+    return {"message": "DB reset & seeded"}
 
 if __name__ == "__main__":
     import uvicorn

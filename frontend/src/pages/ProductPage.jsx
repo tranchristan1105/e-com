@@ -128,7 +128,13 @@ const ProductPage = () => {
                            name: product.name, 
                            price: product.price,
                            category: product.category
-                       }); 
+                        });
+                       trackMarketingEvent('AddToCart', {
+                            content_ids: [product.id],
+                            content_name: product.name,
+                            value: product.price,
+                            currency: 'EUR'
+                        }); 
                    }}
                    className="flex-1 bg-slate-900 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-slate-800 shadow-xl shadow-slate-200 transition-all active:scale-95 flex items-center justify-center gap-3"
                  >
