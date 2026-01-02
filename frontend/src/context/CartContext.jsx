@@ -1,9 +1,9 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import toast from 'react-hot-toast'; // <--- IMPORT
 
 const CartContext = createContext();
 
 export const CartProvider = ({ children }) => {
-  // On essaie de récupérer le panier du localStorage au chargement
   const [cart, setCart] = useState(() => {
     try {
       const savedCart = localStorage.getItem('ecommerce_cart');
@@ -15,7 +15,6 @@ export const CartProvider = ({ children }) => {
   
   const [isCartOpen, setIsCartOpen] = useState(false);
 
-  // Sauvegarde automatique dans le localStorage à chaque changement
   useEffect(() => {
     localStorage.setItem('ecommerce_cart', JSON.stringify(cart));
   }, [cart]);
@@ -23,13 +22,15 @@ export const CartProvider = ({ children }) => {
   const addToCart = (product) => {
     setCart((prev) => [...prev, product]);
     setIsCartOpen(true);
+    // Notification Pro
+    toast.success(`${product.name} ajouté au panier !`);
   };
 
   const removeFromCart = (indexToRemove) => {
     setCart((prev) => prev.filter((_, index) => index !== indexToRemove));
+    toast.error("Produit retiré");
   };
 
-  // NOUVELLE FONCTION : Vider le panier
   const clearCart = () => {
     setCart([]);
     localStorage.removeItem('ecommerce_cart');
@@ -42,7 +43,7 @@ export const CartProvider = ({ children }) => {
       cart, 
       addToCart, 
       removeFromCart, 
-      clearCart, // <--- On expose la fonction ici
+      clearCart,
       cartTotal, 
       isCartOpen, 
       setIsCartOpen 

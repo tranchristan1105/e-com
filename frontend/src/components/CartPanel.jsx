@@ -1,18 +1,15 @@
 import React, { useState } from 'react';
 import { X, ShoppingCart, Trash2, CreditCard, Loader } from 'lucide-react';
-// CORRECTION 1 : Ajout de l'extension .jsx explicite pour la résolution de module
-import { useCart } from '../context/CartContext.jsx';
+import { useCart } from '../context/CartContext';
+import toast from 'react-hot-toast'; // <--- IMPORT
 
-// CORRECTION 2 : Gestion sécurisée de l'URL API (Fallback si import.meta n'est pas supporté)
+// Gestion sécurisée URL
 let apiUrl = "http://localhost:8000/api/v1";
 try {
   if (import.meta && import.meta.env && import.meta.env.VITE_API_URL) {
     apiUrl = import.meta.env.VITE_API_URL;
   }
-} catch (e) {
-  // En cas d'erreur (environnement qui ne supporte pas import.meta), on garde localhost
-  console.log("Environment variables not supported, using default localhost");
-}
+} catch (e) {}
 const API_URL = apiUrl;
 
 const CartPanel = () => {
@@ -25,9 +22,10 @@ const CartPanel = () => {
     if (cart.length === 0) return;
     
     setIsProcessing(true);
+    // Petit toast de chargement
+    const loadingToast = toast.loading('Préparation du paiement...');
     
     try {
-        console.log("Tentative de paiement vers:", API_URL); // Debug
         const response = await fetch(`${API_URL}/create-checkout-session`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -36,15 +34,19 @@ const CartPanel = () => {
         
         const data = await response.json();
         
+        // On ferme le toast de chargement
+        toast.dismiss(loadingToast);
+
         if (data.checkout_url) {
             window.location.href = data.checkout_url;
         } else {
-            alert("Erreur lors de la création du paiement.");
+            toast.error("Erreur technique lors de la commande.");
             setIsProcessing(false);
         }
     } catch (error) {
+        toast.dismiss(loadingToast);
         console.error("Erreur Checkout:", error);
-        alert("Impossible de contacter le serveur de paiement.");
+        toast.error("Impossible de contacter le serveur.");
         setIsProcessing(false);
     }
   };
