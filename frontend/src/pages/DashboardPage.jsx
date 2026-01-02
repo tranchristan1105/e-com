@@ -18,8 +18,7 @@ const API_URL = apiUrl;
 const DashboardPage = () => {
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
-  // Correction : On remet 'analytics' par défaut pour afficher le tunnel au démarrage
-  const [activeTab, setActiveTab] = useState('analytics'); 
+  const [activeTab, setActiveTab] = useState('orders'); // On reste sur les commandes pour voir le résultat
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
 
@@ -28,7 +27,10 @@ const DashboardPage = () => {
     client: '',
     amount: '',
     email: '',
-    items: ''
+    items: '',
+    addressLine1: '',
+    city: '',
+    postalCode: ''
   });
 
   const fetchData = async () => {
@@ -81,14 +83,20 @@ const DashboardPage = () => {
           amount: parseFloat(formData.amount),
           items: JSON.stringify(itemsArray),
           date: new Date().toISOString(),
-          address: { city: 'Paris', country: 'France' }
+          // Envoi de l'adresse complète structurée
+          address: { 
+            line1: formData.addressLine1 || '',
+            city: formData.city || '',
+            postal_code: formData.postalCode || '',
+            country: 'France' 
+          }
         })
       });
 
       if (!response.ok) throw new Error("Erreur serveur");
       toast.success("Commande ajoutée !", { id: toastId });
       setShowAddForm(false);
-      setFormData({ client: '', amount: '', email: '', items: '' });
+      setFormData({ client: '', amount: '', email: '', items: '', addressLine1: '', city: '', postalCode: '' });
       fetchData(); 
 
     } catch (err) {
@@ -280,10 +288,55 @@ const DashboardPage = () => {
                   <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 mb-6 animate-in zoom-in-95">
                     <h3 className="font-bold text-lg mb-4">Nouvelle Commande</h3>
                     <form onSubmit={handleAddOrder} className="grid md:grid-cols-2 gap-4">
-                      <input className="border p-2 rounded" placeholder="Nom du Client" value={formData.client} onChange={e => setFormData({...formData, client: e.target.value})} />
-                      <input className="border p-2 rounded" placeholder="Email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-                      <input className="border p-2 rounded" placeholder="Montant" type="number" step="0.01" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} />
-                      <input className="border p-2 rounded" placeholder="Produits (virgule)" value={formData.items} onChange={e => setFormData({...formData, items: e.target.value})} />
+                      {/* Champs Client */}
+                      <input 
+                        className="border p-2 rounded" 
+                        placeholder="Nom du Client" 
+                        value={formData.client} 
+                        onChange={e => setFormData({...formData, client: e.target.value})} 
+                      />
+                      <input 
+                        className="border p-2 rounded" 
+                        placeholder="Email" 
+                        value={formData.email} 
+                        onChange={e => setFormData({...formData, email: e.target.value})} 
+                      />
+                      
+                      {/* Champs Montant & Produits */}
+                      <input 
+                        className="border p-2 rounded" 
+                        placeholder="Montant" 
+                        type="number" step="0.01" 
+                        value={formData.amount} 
+                        onChange={e => setFormData({...formData, amount: e.target.value})} 
+                      />
+                      <input 
+                        className="border p-2 rounded" 
+                        placeholder="Produits (virgule)" 
+                        value={formData.items} 
+                        onChange={e => setFormData({...formData, items: e.target.value})} 
+                      />
+
+                      {/* Nouveaux Champs Adresse */}
+                      <input 
+                        className="border p-2 rounded col-span-2" 
+                        placeholder="Adresse (Rue, numéro...)" 
+                        value={formData.addressLine1} 
+                        onChange={e => setFormData({...formData, addressLine1: e.target.value})} 
+                      />
+                      <input 
+                        className="border p-2 rounded" 
+                        placeholder="Code Postal" 
+                        value={formData.postalCode} 
+                        onChange={e => setFormData({...formData, postalCode: e.target.value})} 
+                      />
+                      <input 
+                        className="border p-2 rounded" 
+                        placeholder="Ville" 
+                        value={formData.city} 
+                        onChange={e => setFormData({...formData, city: e.target.value})} 
+                      />
+
                       <button type="submit" className="col-span-full bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700">Confirmer</button>
                     </form>
                   </div>
@@ -303,6 +356,10 @@ const DashboardPage = () => {
                                 if (!Array.isArray(parsedItems)) parsedItems = [order.items];
                             } catch (e) { parsedItems = [order.items || "-"]; }
 
+                            // CORRECTION AFFICHAGE ADRESSE
+                            // On vérifie s'il y a vraiment du contenu dans l'objet adresse
+                            const hasAddress = order.address && (order.address.line1 || order.address.city);
+
                             return (
                                 <div key={order.id} className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
                                     <div className="flex justify-between items-center mb-4 pb-4 border-b border-slate-100">
@@ -315,9 +372,23 @@ const DashboardPage = () => {
                                             <button onClick={() => handleDeleteOrder(order.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={18} /></button>
                                         </div>
                                     </div>
-                                    <div className="text-sm text-slate-600">
-                                        <p className="font-semibold mb-1"><Package size={14} className="inline mr-1"/> Produits:</p>
-                                        <ul className="list-disc pl-5">{parsedItems.map((it, i) => <li key={i}>{it}</li>)}</ul>
+                                    <div className="grid md:grid-cols-2 gap-4 text-sm text-slate-600">
+                                        <div>
+                                            <p className="font-semibold mb-1"><Package size={14} className="inline mr-1"/> Produits:</p>
+                                            <ul className="list-disc pl-5">{parsedItems.map((it, i) => <li key={i}>{it}</li>)}</ul>
+                                        </div>
+                                        <div>
+                                            <p className="font-semibold mb-1"><MapPin size={14} className="inline mr-1"/> Livraison:</p>
+                                            <div className="bg-slate-50 p-2 rounded border border-slate-100">
+                                                {hasAddress ? (
+                                                    <>
+                                                        <p className="font-medium text-slate-800">{order.address.line1}</p>
+                                                        <p>{order.address.postal_code} {order.address.city}</p>
+                                                        <p className="uppercase text-xs text-slate-500 mt-1">{order.address.country}</p>
+                                                    </>
+                                                ) : <span className="italic text-slate-400">Adresse non renseignée</span>}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             );
