@@ -157,7 +157,6 @@ def get_orders(db: Session = Depends(get_db)):
     for o in orders:
         try:
             items = json.loads(o.items_json)
-            # Sécurisation du chargement de l'adresse
             if o.shipping_address_json:
                 address = json.loads(o.shipping_address_json)
             else:
@@ -209,11 +208,7 @@ def create_checkout_session(cart: CheckoutSchema):
             mode='payment',
             success_url=f'{c_url}/success?session_id={{CHECKOUT_SESSION_ID}}',
             cancel_url=f'{c_url}/cancel',
-            
-            # --- IMPORTANT : C'est ce bloc qui active le formulaire d'adresse ---
             shipping_address_collection={"allowed_countries": ["FR", "BE", "CH", "CA"]},
-            # ------------------------------------------------------------------
-            
             metadata={
                 "items_summary": json.dumps(summary_items)
             }
@@ -223,7 +218,7 @@ def create_checkout_session(cart: CheckoutSchema):
         print(f"Stripe Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-# --- WEBHOOK AVEC DEBUG ---
+# --- WEBHOOK AMÉLIORÉ ---
 @app.post("/api/v1/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     payload = await request.body()
@@ -239,32 +234,32 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     except stripe.error.SignatureVerificationError as e:
         raise HTTPException(status_code=400, detail="Invalid signature")
 
-    # Si le paiement est réussi
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
         
-        # --- 🕵️‍♀️ DEBUG LOGS (Regardez votre terminal !) ---
         print("\n--- 📦 WEBHOOK REÇU ---")
-        
-        # On essaie de récupérer shipping_details
-        shipping = session.get('shipping_details')
-        print(f"🔍 Contenu brut de shipping_details : {shipping}")
-
-        # On regarde customer_details aussi au cas où
-        customer = session.get('customer_details')
-        print(f"👤 Contenu brut de customer_details : {customer}")
-
-        # --- FIN DEBUG LOGS ---
-
         stripe_id = session.get('id')
         amount = session.get('amount_total', 0) / 100
-        customer_details = session.get('customer_details', {})
+        customer_details = session.get('customer_details', {}) or {}
         shipping = session.get('shipping_details', {}) or {}
         
-        items_json = session.get('metadata', {}).get('items_summary', '[]')
+        # --- LOGIQUE DE SECOURS (FALLBACK) ---
+        # 1. On cherche d'abord dans shipping_details
+        address_data = shipping.get('address')
         
-        # On sauvegarde l'adresse. Si shipping est vide, ça sauvera "{}"
-        address_to_save = json.dumps(shipping.get('address', {}))
+        # 2. Si vide, on prend l'adresse de facturation dans customer_details
+        if not address_data and customer_details.get('address'):
+            print("⚠️ Shipping vide, utilisation de l'adresse de facturation.")
+            address_data = customer_details.get('address')
+            
+        # Si toujours vide, on met un objet vide pour éviter le crash
+        if not address_data:
+            address_data = {}
+
+        print(f"📍 Adresse finale capturée : {address_data}")
+        # -------------------------------------
+
+        items_json = session.get('metadata', {}).get('items_summary', '[]')
         
         new_order = OrderModel(
             stripe_id=stripe_id,
@@ -273,11 +268,11 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             total_amount=amount,
             status="paid",
             items_json=items_json,
-            shipping_address_json=address_to_save
+            shipping_address_json=json.dumps(address_data)
         )
         db.add(new_order)
         db.commit()
-        print(f"💰 Commande sauvegardée avec succès.\n")
+        print(f"💰 Commande sauvegardée.\n")
 
     return {"status": "success"}
 
