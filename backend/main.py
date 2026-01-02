@@ -158,6 +158,16 @@ def create_checkout_session(cart: CheckoutSchema):
         if not stripe.api_key:
              raise Exception("Clé Stripe non configurée !")
 
+        # --- CORRECTION ICI : ON RELIT LA VARIABLE AU MOMENT DU PAIEMENT ---
+        # On ne fait pas confiance à la variable globale, on va la chercher à la source
+        current_frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        
+        # On enlève le slash à la fin s'il y en a un pour éviter les doubles //
+        if current_frontend_url.endswith('/'):
+            current_frontend_url = current_frontend_url[:-1]
+
+        print(f"💰 Création session Stripe. Redirection prévue vers : {current_frontend_url}")
+
         line_items = []
         for item in cart.items:
             line_items.append({
@@ -169,17 +179,16 @@ def create_checkout_session(cart: CheckoutSchema):
                 'quantity': 1,
             })
 
-        # Utilisation de la variable FRONTEND_URL pour la redirection
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=line_items,
             mode='payment',
-            success_url=f'{frontend_url}/success?session_id={{CHECKOUT_SESSION_ID}}',
-            cancel_url=f'{frontend_url}/cancel',
+            # On utilise la variable locale fraîchement lue
+            success_url=f'{current_frontend_url}/success?session_id={{CHECKOUT_SESSION_ID}}',
+            cancel_url=f'{current_frontend_url}/cancel',
         )
         
         return {"checkout_url": checkout_session.url}
-    
     except Exception as e:
         print(f"Stripe Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
