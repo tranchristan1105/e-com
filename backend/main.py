@@ -198,6 +198,16 @@ def seed_database(db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Base de données mise à jour !"}
 
+@app.get("/api/v1/debug-config")
+def debug_config():
+    """Route secrète pour vérifier la configuration en production"""
+    return {
+        "frontend_url_detected": os.getenv("FRONTEND_URL"),
+        "frontend_url_default": "http://localhost:5173",
+        "final_url_used": FRONTEND_URL,
+        "stripe_key_masked": stripe.api_key[:8] + "..." if stripe.api_key else "None"
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
