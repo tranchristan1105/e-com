@@ -11,12 +11,9 @@ import os
 
 # --- CONFIGURATION ---
 stripe.api_key = os.getenv("STRIPE_API_KEY")
-# Secret de signature Webhook (A récupérer dans le dashboard Stripe > Webhooks)
-# Pour le test local, on peut le laisser vide ou utiliser celui du CLI Stripe
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "") 
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
-# Vérification Debug
 if not stripe.api_key:
     print("❌ ERREUR : Clé Stripe manquante !")
 
@@ -61,7 +58,6 @@ class OrderSchema(BaseModel):
     total_amount: float
     status: str
     created_at: str
-    # On ne renvoie pas tout le détail JSON pour la liste légère, à voir si besoin
     
     class Config:
         from_attributes = True
@@ -120,7 +116,6 @@ def get_analytics_stats(db: Session = Depends(get_db)):
     stats_query = db.query(EventModel.event_type, func.count(EventModel.event_type)).group_by(EventModel.event_type).all()
     stats_by_type = {type_: count for type_, count in stats_query}
 
-    # Top Produits
     product_events = db.query(EventModel).filter(EventModel.event_type.in_(['view_item', 'add_to_cart'])).all()
     product_counts = {}
     for event in product_events:
@@ -131,14 +126,12 @@ def get_analytics_stats(db: Session = Depends(get_db)):
         except: continue
     sorted_products = dict(sorted(product_counts.items(), key=lambda item: item[1], reverse=True)[:10])
 
-    # Funnel
     funnel_data = {
         "1_visitors": stats_by_type.get('page_view', 0),
         "2_interested": stats_by_type.get('view_item', 0),
         "3_converted": stats_by_type.get('add_to_cart', 0)
     }
     
-    # CHIFFRE D'AFFAIRES (Nouveau !)
     total_sales = db.query(func.sum(OrderModel.total_amount)).scalar() or 0.0
     orders_count = db.query(OrderModel).count()
 
@@ -147,8 +140,8 @@ def get_analytics_stats(db: Session = Depends(get_db)):
     return {
         "summary": {
             "total_events": total,
-            "total_sales": total_sales, # <--- CA Total
-            "total_orders": orders_count, # <--- Nombre Commandes
+            "total_sales": total_sales,
+            "total_orders": orders_count,
             "breakdown": stats_by_type,
             "top_products": sorted_products,
             "funnel": funnel_data
@@ -156,18 +149,19 @@ def get_analytics_stats(db: Session = Depends(get_db)):
         "recent_logs": recent_logs
     }
 
-# Route pour lister les commandes dans le dashboard
 @app.get("/api/v1/orders")
 def get_orders(db: Session = Depends(get_db)):
-    # On récupère les 50 dernières commandes
     orders = db.query(OrderModel).order_by(OrderModel.created_at.desc()).limit(50).all()
     
-    # On prépare une réponse propre avec le JSON parsé pour le frontend
     result = []
     for o in orders:
         try:
             items = json.loads(o.items_json)
-            address = json.loads(o.shipping_address_json)
+            # Sécurisation du chargement de l'adresse
+            if o.shipping_address_json:
+                address = json.loads(o.shipping_address_json)
+            else:
+                address = {}
         except:
             items = []
             address = {}
@@ -196,8 +190,6 @@ def create_checkout_session(cart: CheckoutSchema):
         if c_url.endswith('/'): c_url = c_url[:-1]
 
         line_items = []
-        # On crée une liste de métadonnées pour savoir ce qu'il y a dans la commande
-        # (Stripe limite la taille des métadonnées, on fait simple ici)
         summary_items = [] 
         
         for item in cart.items:
@@ -217,10 +209,13 @@ def create_checkout_session(cart: CheckoutSchema):
             mode='payment',
             success_url=f'{c_url}/success?session_id={{CHECKOUT_SESSION_ID}}',
             cancel_url=f'{c_url}/cancel',
-            # On demande l'adresse de livraison et de facturation
+            
+            # --- IMPORTANT : C'est ce bloc qui active le formulaire d'adresse ---
             shipping_address_collection={"allowed_countries": ["FR", "BE", "CH", "CA"]},
+            # ------------------------------------------------------------------
+            
             metadata={
-                "items_summary": json.dumps(summary_items) # Pour retrouver les produits plus tard
+                "items_summary": json.dumps(summary_items)
             }
         )
         return {"checkout_url": checkout_session.url}
@@ -228,19 +223,16 @@ def create_checkout_session(cart: CheckoutSchema):
         print(f"Stripe Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-# --- WEBHOOK (Le Listener Automatique) ---
+# --- WEBHOOK AVEC DEBUG ---
 @app.post("/api/v1/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     payload = await request.body()
     sig_header = request.headers.get('stripe-signature')
 
     try:
-        # En prod, on vérifie la signature pour la sécurité
-        # En dev local sans CLI, on bypass souvent cette étape ou on utilise un secret de test
         if STRIPE_WEBHOOK_SECRET:
             event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
         else:
-            # Mode "confiance" pour le dev simple (attention sécurité en prod)
             event = json.loads(payload)
     except ValueError as e:
         raise HTTPException(status_code=400, detail="Invalid payload")
@@ -251,16 +243,29 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
         
-        # Extraction des données
+        # --- 🕵️‍♀️ DEBUG LOGS (Regardez votre terminal !) ---
+        print("\n--- 📦 WEBHOOK REÇU ---")
+        
+        # On essaie de récupérer shipping_details
+        shipping = session.get('shipping_details')
+        print(f"🔍 Contenu brut de shipping_details : {shipping}")
+
+        # On regarde customer_details aussi au cas où
+        customer = session.get('customer_details')
+        print(f"👤 Contenu brut de customer_details : {customer}")
+
+        # --- FIN DEBUG LOGS ---
+
         stripe_id = session.get('id')
         amount = session.get('amount_total', 0) / 100
         customer_details = session.get('customer_details', {})
         shipping = session.get('shipping_details', {}) or {}
         
-        # Récupération des articles depuis les métadonnées (stockées lors du checkout)
         items_json = session.get('metadata', {}).get('items_summary', '[]')
         
-        # Sauvegarde en DB
+        # On sauvegarde l'adresse. Si shipping est vide, ça sauvera "{}"
+        address_to_save = json.dumps(shipping.get('address', {}))
+        
         new_order = OrderModel(
             stripe_id=stripe_id,
             customer_email=customer_details.get('email'),
@@ -268,18 +273,17 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             total_amount=amount,
             status="paid",
             items_json=items_json,
-            shipping_address_json=json.dumps(shipping.get('address', {}))
+            shipping_address_json=address_to_save
         )
         db.add(new_order)
         db.commit()
-        print(f"💰 Commande enregistrée : {amount}€ par {customer_details.get('email')}")
+        print(f"💰 Commande sauvegardée avec succès.\n")
 
     return {"status": "success"}
 
 @app.post("/api/v1/seed")
 def seed_database(db: Session = Depends(get_db)):
     db.query(ProductModel).delete()
-    # (Tes produits habituels ici...)
     products = [
         ProductModel(name="iPhone 15 Pro", price=1299.0, category="Smartphone", image_url="https://images.unsplash.com/photo-1696446701796-da61225697cc?w=800", description="Le titane rencontre la puissance."),
         ProductModel(name="MacBook Air M2", price=1499.0, category="Ordinateur", image_url="https://images.unsplash.com/photo-1517336714731-489689fd1ca4?w=800", description="Incroyablement fin."),
