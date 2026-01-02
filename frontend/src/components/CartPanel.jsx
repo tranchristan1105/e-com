@@ -1,9 +1,19 @@
 import React, { useState } from 'react';
 import { X, ShoppingCart, Trash2, CreditCard, Loader } from 'lucide-react';
-// Correction : Suppression de l'extension .jsx pour l'import standard
-import { useCart } from '../context/CartContext';
+// CORRECTION 1 : Ajout de l'extension .jsx explicite pour la résolution de module
+import { useCart } from '../context/CartContext.jsx';
 
-const API_URL = "http://localhost:8000/api/v1";
+// CORRECTION 2 : Gestion sécurisée de l'URL API (Fallback si import.meta n'est pas supporté)
+let apiUrl = "http://localhost:8000/api/v1";
+try {
+  if (import.meta && import.meta.env && import.meta.env.VITE_API_URL) {
+    apiUrl = import.meta.env.VITE_API_URL;
+  }
+} catch (e) {
+  // En cas d'erreur (environnement qui ne supporte pas import.meta), on garde localhost
+  console.log("Environment variables not supported, using default localhost");
+}
+const API_URL = apiUrl;
 
 const CartPanel = () => {
   const { cart, removeFromCart, cartTotal, isCartOpen, setIsCartOpen } = useCart();
@@ -11,13 +21,13 @@ const CartPanel = () => {
   
   if (!isCartOpen) return null;
 
-  // Fonction pour déclencher le paiement
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     
     setIsProcessing(true);
     
     try {
+        console.log("Tentative de paiement vers:", API_URL); // Debug
         const response = await fetch(`${API_URL}/create-checkout-session`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -27,7 +37,6 @@ const CartPanel = () => {
         const data = await response.json();
         
         if (data.checkout_url) {
-            // Redirection vers la page de paiement sécurisée Stripe
             window.location.href = data.checkout_url;
         } else {
             alert("Erreur lors de la création du paiement.");
@@ -123,7 +132,6 @@ const CartPanel = () => {
   );
 };
 
-// Petits composants icônes pour éviter les erreurs d'import si Lucide manque
 const ShoppingBagIcon = (props) => <ShoppingCart {...props} />;
 const LockIcon = ({size}) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

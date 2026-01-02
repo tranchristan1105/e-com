@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTracking } from '../hooks/useTracking';
-import { Search, Filter, X } from 'lucide-react'; // Nouvelles icônes
+import { Search, X } from 'lucide-react';
 
-const API_URL = "http://localhost:8000/api/v1";
+// --- CORRECTION ICI ---
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
 const HomePage = () => {
   const [products, setProducts] = useState([]);
-  const [searchTerm, setSearchTerm] = useState(""); // État recherche
-  const [selectedCategory, setSelectedCategory] = useState("Tout"); // État catégorie
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("Tout");
   const navigate = useNavigate();
   const { trackEvent } = useTracking();
   const hasTracked = useRef(false);
@@ -20,9 +21,7 @@ const HomePage = () => {
     {id: 2, name: "Laptop Demo", price: 1299, category: "Tech", image_url: "https://via.placeholder.com/300"},
   ];
 
-  // Fonction pour charger les produits avec filtres
   const fetchProducts = () => {
-    // Construction de l'URL avec paramètres (ex: ?q=mac&category=Ordinateur)
     let url = `${API_URL}/products?`;
     if (searchTerm) url += `q=${searchTerm}&`;
     if (selectedCategory && selectedCategory !== "Tout") url += `category=${selectedCategory}`;
@@ -36,12 +35,9 @@ const HomePage = () => {
       .catch(() => setProducts(fallbackProducts));
   };
 
-  // On recharge quand la recherche ou la catégorie change
   useEffect(() => {
-    // Debounce (attendre que l'utilisateur finisse de taper) pour éviter trop d'appels
     const delayDebounceFn = setTimeout(() => {
       fetchProducts();
-      // Tracking de la recherche si elle n'est pas vide
       if (searchTerm.length > 2) {
           trackEvent('search', { term: searchTerm, category: selectedCategory });
       }
@@ -50,7 +46,6 @@ const HomePage = () => {
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm, selectedCategory]);
 
-  // Tracking initial page view
   useEffect(() => {
     if (!hasTracked.current) {
         trackEvent('page_view', { page: 'home' });
@@ -60,12 +55,9 @@ const HomePage = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-12">
-       
-       {/* HEADER & RECHERCHE */}
        <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mt-2 mb-6">La Collection</h1>
           
-          {/* Barre de Recherche */}
           <div className="max-w-md mx-auto relative mb-8">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-5 w-5 text-gray-400" />
@@ -73,21 +65,15 @@ const HomePage = () => {
             <input
               type="text"
               className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm shadow-sm transition-all"
-              placeholder="Rechercher un produit (ex: iPhone, Sony...)"
+              placeholder="Rechercher un produit..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
             {searchTerm && (
-                <button 
-                    onClick={() => setSearchTerm('')}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
-                >
-                    <X size={16} />
-                </button>
+                <button onClick={() => setSearchTerm('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"><X size={16} /></button>
             )}
           </div>
 
-          {/* Filtres Catégories (Pillules) */}
           <div className="flex flex-wrap justify-center gap-2">
             {categories.map((cat) => (
               <button
@@ -105,7 +91,6 @@ const HomePage = () => {
           </div>
        </div>
 
-       {/* GRILLE PRODUITS */}
        {products.length === 0 ? (
            <div className="text-center py-20 text-gray-500">
                <p className="text-lg">Aucun produit ne correspond à votre recherche.</p>

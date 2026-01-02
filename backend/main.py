@@ -160,7 +160,7 @@ def create_checkout_session(cart: CheckoutSchema):
 
         # --- CORRECTION ICI : ON RELIT LA VARIABLE AU MOMENT DU PAIEMENT ---
         # On ne fait pas confiance à la variable globale, on va la chercher à la source
-        current_frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        current_frontend_url = os.getenv("FRONTEND_URL")
         
         # On enlève le slash à la fin s'il y en a un pour éviter les doubles //
         if current_frontend_url.endswith('/'):

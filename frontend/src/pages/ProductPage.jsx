@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, ShoppingCart, ShieldCheck, Truck } from 'lucide-react';
-// Retour aux imports standards sans extension pour la compatibilité
 import { useCart } from '../context/CartContext';
 import { useTracking } from '../hooks/useTracking';
 
-const API_URL = "http://localhost:8000/api/v1";
+// --- CORRECTION ICI ---
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
 const ProductPage = () => {
   const { id } = useParams();
@@ -33,11 +33,10 @@ const ProductPage = () => {
       })
       .then(data => {
         setProduct(data);
-        // AJOUT DE 'category' ICI
         trackEvent('view_item', { 
             product_id: data.id, 
             name: data.name,
-            category: data.category // <--- NOUVEAU
+            category: data.category
         });
       })
       .catch((err) => {
@@ -80,12 +79,11 @@ const ProductPage = () => {
                <button
                  onClick={() => { 
                      addToCart(product); 
-                     // AJOUT DE 'category' ICI AUSSI
                      trackEvent('add_to_cart', { 
                          id: product.id, 
                          name: product.name, 
                          price: product.price,
-                         category: product.category // <--- NOUVEAU
+                         category: product.category
                      }); 
                  }}
                  className="flex-1 bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all active:scale-95 flex items-center justify-center gap-3"
@@ -93,7 +91,6 @@ const ProductPage = () => {
                  <ShoppingCart size={24} /> Ajouter au panier
                </button>
             </div>
-            {/* Reste du code inchangé (réassurances) */}
             <div className="grid grid-cols-2 gap-4">
                <div className="flex items-center text-gray-600 text-sm bg-gray-50 p-3 rounded-lg"><Check className="text-green-500 mr-2" size={20} /> En stock</div>
                <div className="flex items-center text-gray-600 text-sm bg-gray-50 p-3 rounded-lg"><Truck className="text-blue-500 mr-2" size={20} /> Livraison 24h</div>
