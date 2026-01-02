@@ -12,7 +12,7 @@ import os
 # --- CONFIGURATION & DEBUG ---
 stripe.api_key = os.getenv("STRIPE_API_KEY")
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
-
+print(frontend_url)
 # Vérification au démarrage
 if not stripe.api_key:
     print("❌ ERREUR CRITIQUE : La clé Stripe (STRIPE_API_KEY) est vide ou manquante !")
