@@ -204,7 +204,7 @@ def debug_config():
     return {
         "frontend_url_detected": os.getenv("FRONTEND_URL"),
         "frontend_url_default": "http://localhost:5173",
-        "final_url_used": FRONTEND_URL,
+        "final_url_used": frontend_url,
         "stripe_key_masked": stripe.api_key[:8] + "..." if stripe.api_key else "None"
     }
 
