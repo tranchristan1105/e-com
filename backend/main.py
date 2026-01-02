@@ -9,22 +9,18 @@ import time
 import stripe
 import os
 
-# --- CONFIGURATION ---
-# 1. Clé Stripe
-stripe.api_key = os.getenv("STRIPE_API_KEY") 
+# --- CONFIGURATION & DEBUG ---
+stripe.api_key = os.getenv("STRIPE_API_KEY")
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
-# 2. URL du Frontend (Dynamique)
-# En local, on utilise localhost. 
-# En production, on définira la variable d'environnement FRONTEND_URL dans Cloud Run.
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
-
+# Vérification au démarrage
 if not stripe.api_key:
     print("❌ ERREUR CRITIQUE : La clé Stripe (STRIPE_API_KEY) est vide ou manquante !")
 else:
-    # On affiche juste les 4 premiers caractères pour vérifier (sans tout révéler)
     print(f"✅ Clé Stripe chargée : {stripe.api_key[:4]}...****")
 
-print(f"✅ Frontend URL : {FRONTEND_URL}")
+print(f"✅ Frontend URL : {frontend_url}")
+
 from app.core.database import engine, Base, get_db
 from app.models.product import Product as ProductModel, AnalyticsEvent as EventModel
 
@@ -86,9 +82,28 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Produit non trouvé")
     return product
 
+# --- CORRECTION ICI : RESTAURATION DES FILTRES ---
 @app.get("/api/v1/products", response_model=List[ProductSchema])
-def get_products(db: Session = Depends(get_db)):
-    return db.query(ProductModel).all()
+def get_products(
+    q: Optional[str] = None, 
+    category: Optional[str] = None, 
+    db: Session = Depends(get_db)
+):
+    query = db.query(ProductModel)
+    
+    # Filtre par texte (nom ou description)
+    if q:
+        search = f"%{q}%"
+        query = query.filter(
+            (ProductModel.name.ilike(search)) | 
+            (ProductModel.description.ilike(search))
+        )
+    
+    # Filtre par catégorie
+    if category and category != "Tout":
+        query = query.filter(ProductModel.category == category)
+        
+    return query.all()
 
 @app.post("/api/v1/analytics")
 def track_event(event: AnalyticsSchema, db: Session = Depends(get_db)):
@@ -136,11 +151,11 @@ def get_analytics_stats(db: Session = Depends(get_db)):
         "recent_logs": recent_logs
     }
 
+# --- ROUTE DE PAIEMENT (STRIPE) ---
 @app.post("/api/v1/create-checkout-session")
 def create_checkout_session(cart: CheckoutSchema):
     try:
-        # Vérif rapide de la clé
-        if "sk_test_VOTRE_CLE" in stripe.api_key:
+        if not stripe.api_key:
              raise Exception("Clé Stripe non configurée !")
 
         line_items = []
@@ -159,8 +174,8 @@ def create_checkout_session(cart: CheckoutSchema):
             payment_method_types=['card'],
             line_items=line_items,
             mode='payment',
-            success_url=f'{FRONTEND_URL}/success?session_id={{CHECKOUT_SESSION_ID}}',
-            cancel_url=f'{FRONTEND_URL}/cancel',
+            success_url=f'{frontend_url}/success?session_id={{CHECKOUT_SESSION_ID}}',
+            cancel_url=f'{frontend_url}/cancel',
         )
         
         return {"checkout_url": checkout_session.url}
