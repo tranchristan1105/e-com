@@ -1,0 +1,13 @@
+empire.db
+*.db
+*.sqlite
+
+
+.env
+.venv
+venv/
+pycache/
+*.pyc
+
+.git
+.gitignore

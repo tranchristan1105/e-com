@@ -15,23 +15,26 @@ import stripe
 import os
 import random
 
-# --- CONFIGURATION ---
+# --- 🚨 CONFIGURATION DEBUG ---
+# On affiche clairement ce que Python voit
+print("\n" + "="*50)
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "NouveauChef")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Secret123")
+print(f"👀 CONFIG CHARGÉE -> User: {ADMIN_USERNAME} / Pass: {ADMIN_PASSWORD}")
+print("="*50 + "\n")
+
+# --- CONFIGURATION API ---
 SECRET_KEY = os.getenv("SECRET_KEY", "mon_super_secret_indevinable_12345")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 
-
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "MonSuperLogin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "MonSuperMotDePasse")
 
 stripe.api_key = os.getenv("STRIPE_API_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "") 
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
-# Outils Sécurité
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/token")
 
-# --- DATABASE ---
 SQLALCHEMY_DATABASE_URL = "sqlite:///./empire.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -168,7 +171,6 @@ async def read_users_me(current_user: AdminUser = Depends(get_current_user)):
     return {"username": current_user.username}
 
 # --- PRODUITS ---
-
 @app.get("/api/v1/products", response_model=List[ProductSchema])
 def get_products(q: Optional[str] = None, category: Optional[str] = None, db: Session = Depends(get_db)):
     query = db.query(ProductModel)
@@ -179,13 +181,11 @@ def get_products(q: Optional[str] = None, category: Optional[str] = None, db: Se
         query = query.filter(ProductModel.category == category)
     return query.order_by(ProductModel.id.desc()).all()
 
-# 👇 C'EST LA ROUTE QUI MANQUAIT POUR L'ERREUR 405 👇
 @app.get("/api/v1/products/{product_id}", response_model=ProductSchema)
 def get_product(product_id: int, db: Session = Depends(get_db)):
     product = db.query(ProductModel).filter(ProductModel.id == product_id).first()
     if not product: raise HTTPException(status_code=404, detail="Produit non trouvé")
     return product
-# 👆 ---------------------------------------------- 👆
 
 @app.post("/api/v1/products", response_model=ProductSchema)
 def create_product(product: ProductCreateSchema, db: Session = Depends(get_db), current_user: AdminUser = Depends(get_current_user)):
@@ -194,6 +194,21 @@ def create_product(product: ProductCreateSchema, db: Session = Depends(get_db), 
     db.commit()
     db.refresh(new_product)
     return new_product
+
+@app.put("/api/v1/products/{product_id}", response_model=ProductSchema)
+def update_product(product_id: int, product: ProductCreateSchema, db: Session = Depends(get_db), current_user: AdminUser = Depends(get_current_user)):
+    db_product = db.query(ProductModel).filter(ProductModel.id == product_id).first()
+    if not db_product: raise HTTPException(status_code=404, detail="Produit introuvable")
+    
+    db_product.name = product.name
+    db_product.price = product.price
+    db_product.category = product.category
+    db_product.image_url = product.image_url
+    db_product.description = product.description
+    
+    db.commit()
+    db.refresh(db_product)
+    return db_product
 
 @app.delete("/api/v1/products/{product_id}")
 def delete_product(product_id: int, db: Session = Depends(get_db), current_user: AdminUser = Depends(get_current_user)):
@@ -334,8 +349,6 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         if not address_data and customer_details.get('address'): address_data = customer_details.get('address')
         if not address_data: address_data = {}
         items_json = session.get('metadata', {}).get('items_summary', '[]')
-        
-        # 1. Sauvegarde de la Commande (OrderModel)
         new_order = OrderModel(
             stripe_id=stripe_id,
             customer_email=customer_details.get('email'),
@@ -346,75 +359,62 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             shipping_address_json=json.dumps(address_data)
         )
         db.add(new_order)
-
-        # 2. Sauvegarde de l'Événement Analytics "Purchase" (EventModel)
-        # C'est ce bloc qui manquait pour mettre à jour vos graphiques et logs !
+        
+        # Analytics Purchase
         purchase_event = EventModel(
             event_type="purchase",
             user_id=customer_details.get('email') or "anonyme",
             page_url="/checkout/success",
-            metadata_json=json.dumps({
-                "amount": amount,
-                "items_count": len(json.loads(items_json) if items_json else [])
-            })
+            metadata_json=json.dumps({"amount": amount})
         )
         db.add(purchase_event)
-
+        
         db.commit()
     return {"status": "success"}
 
-# --- SEED ---
+# --- NETTOYAGE & SEED FORCÉ ---
+def force_reset_admin(db: Session):
+    # 🧹 On supprime tous les anciens admins pour être sûr
+    deleted = db.query(AdminUser).delete()
+    if deleted > 0:
+        print(f"🧹 Nettoyage : {deleted} ancien(s) admin(s) supprimé(s).")
+    
+    # 🆕 On crée le nouveau
+    admin = AdminUser(username=ADMIN_USERNAME, hashed_password=get_password_hash(ADMIN_PASSWORD))
+    db.add(admin)
+    db.commit()
+    print(f"👑 ADMIN RECRÉÉ -> Login: {ADMIN_USERNAME} / Pass: {ADMIN_PASSWORD}")
+
 @app.post("/api/v1/seed")
 def seed_database(db: Session = Depends(get_db)):
     if db.query(ProductModel).count() == 0:
         products = [
             ProductModel(name="iPhone 15 Pro", price=1299.0, category="Smartphone", image_url="https://images.unsplash.com/photo-1696446701796-da61225697cc?w=800", description="Titane pur."),
             ProductModel(name="MacBook Air M2", price=1499.0, category="Ordinateur", image_url="https://images.unsplash.com/photo-1517336714731-489689fd1ca4?w=800", description="Puce M2."),
-            ProductModel(name="Sony XM5", price=349.0, category="Audio", image_url="https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?w=800", description="Silence absolu."),
         ]
         db.add_all(products)
     
-    if not db.query(AdminUser).filter(AdminUser.username == "admin").first():
-        admin = AdminUser(username="admin", hashed_password=get_password_hash("admin"))
-        db.add(admin)
-
+    # Fake Analytics
     if db.query(EventModel).count() == 0:
         events = []
         for _ in range(50): events.append(EventModel(event_type="page_view", user_id="visitor", page_url="/"))
-        for _ in range(20):
-            prod = random.choice(["iPhone 15 Pro", "MacBook Air M2"])
-            events.append(EventModel(event_type="view_item", user_id="visitor", page_url="/product", metadata_json=json.dumps({"name": prod})))
-        for _ in range(5):
-            prod = random.choice(["iPhone 15 Pro", "MacBook Air M2"])
-            events.append(EventModel(event_type="add_to_cart", user_id="visitor", page_url="/cart", metadata_json=json.dumps({"name": prod})))
+        for _ in range(20): events.append(EventModel(event_type="view_item", user_id="visitor", page_url="/product", metadata_json="{}"))
+        for _ in range(5): events.append(EventModel(event_type="add_to_cart", user_id="visitor", page_url="/cart", metadata_json="{}"))
         db.add_all(events)
 
     db.commit()
-    return {"message": "DB seeded"}
-
-@app.put("/api/v1/products/{product_id}", response_model=ProductSchema)
-def update_product(product_id: int, product: ProductCreateSchema, db: Session = Depends(get_db), current_user: AdminUser = Depends(get_current_user)):
-    db_product = db.query(ProductModel).filter(ProductModel.id == product_id).first()
-    if not db_product: raise HTTPException(status_code=404, detail="Produit introuvable")
     
-    # Mise à jour des champs
-    db_product.name = product.name
-    db_product.price = product.price
-    db_product.category = product.category
-    db_product.image_url = product.image_url
-    db_product.description = product.description
-    
-    db.commit()
-    db.refresh(db_product)
-    return db_product
+    # On force la réinitialisation de l'admin même dans le seed manuel
+    force_reset_admin(db)
+    return {"message": "DB seeded & Admin Reset"}
 
 @app.on_event("startup")
 def startup_event():
     db = SessionLocal()
-    # MODIFICATION : On appelle le seed à CHAQUE démarrage pour être sûr que les analytics sont là.
-    # La fonction seed_database a des protections internes (if count == 0) pour ne pas dupliquer.
+    # 1. On lance le seed normal (produits, stats)
     seed_database(db)
-    print("🚀 Démarrage : Vérification des données initiales terminée.")
+    # 2. On lance la méthode nucléaire pour l'admin
+    force_reset_admin(db)
     db.close()
 
 if __name__ == "__main__":
