@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import Column, Integer, String, Float, create_engine, func
@@ -14,27 +14,38 @@ import time
 import stripe
 import os
 import random
+import sys
+import resend 
 
-# --- 🚨 CONFIGURATION DEBUG ---
-# On affiche clairement ce que Python voit
-print("\n" + "="*50)
+# ==============================================================================
+# 1. CONFIGURATION GLOBALE
+# ==============================================================================
+
+# --- Identifiants Admin (Configurable via Cloud Run) ---
+print("\n" + "#"*50, flush=True)
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "NouveauChef")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Secret123")
-print(f"👀 CONFIG CHARGÉE -> User: {ADMIN_USERNAME} / Pass: {ADMIN_PASSWORD}")
-print("="*50 + "\n")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY") 
+print(f"👀 CONFIG : Admin={ADMIN_USERNAME}, Resend={'OK' if RESEND_API_KEY else 'MANQUANT'}", flush=True)
+print("#"*50 + "\n", flush=True)
 
-# --- CONFIGURATION API ---
+# --- Clés API & Sécurité ---
 SECRET_KEY = os.getenv("SECRET_KEY", "mon_super_secret_indevinable_12345")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 24 heures
 
 stripe.api_key = os.getenv("STRIPE_API_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "") 
+resend.api_key = RESEND_API_KEY
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
+# --- Outils de hachage & Token ---
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/token")
 
+# ==============================================================================
+# 2. BASE DE DONNÉES
+# ==============================================================================
 SQLALCHEMY_DATABASE_URL = "sqlite:///./empire.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -45,7 +56,7 @@ def get_db():
     try: yield db
     finally: db.close()
 
-# --- MODELS ---
+# --- Modèles SQL (Tables) ---
 class AdminUser(Base):
     __tablename__ = "admins"
     id = Column(Integer, primary_key=True, index=True)
@@ -82,6 +93,7 @@ class EventModel(Base):
     metadata_json = Column(String)
     created_at = Column(String, default=lambda: datetime.now().isoformat())
 
+# Création des tables au démarrage
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Empire E-commerce API")
@@ -94,13 +106,52 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- SECURITY UTILS ---
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+# ==============================================================================
+# 3. UTILITAIRES & FONCTIONS
+# ==============================================================================
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
+# --- Emails (Resend) ---
+def create_email_html(customer_name, amount, items_list, address):
+    items_html = "".join([f"<li style='margin-bottom: 5px;'>{item}</li>" for item in items_list])
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f4; padding: 20px;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 40px; border-radius: 10px;">
+            <h1 style="color: #2563eb; text-align: center;">Empire Store</h1>
+            <h2 style="color: #333;">Merci {customer_name} ! 🎉</h2>
+            <p style="color: #666;">Nous avons bien reçu votre commande.</p>
+            <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 30px 0;">
+                <h3>Récapitulatif</h3>
+                <ul>{items_html}</ul>
+                <p><strong>Total : {amount} €</strong></p>
+            </div>
+            <p><strong>Adresse de livraison :</strong><br>
+            {address.get('line1', '')}<br>{address.get('postal_code', '')} {address.get('city', '')}<br>{address.get('country', '')}</p>
+        </div>
+    </body>
+    </html>
+    """
 
+def send_confirmation_email(to_email: str, name: str, amount: float, items: list, address: dict):
+    if not RESEND_API_KEY:
+        print("⚠️ Pas de clé Resend, email ignoré.")
+        return
+    try:
+        html_content = create_email_html(name, amount, items, address)
+        r = resend.Emails.send({
+            "from": "onboarding@resend.dev",
+            "to": to_email, 
+            "subject": f"Confirmation de commande Empire (#{int(time.time())})",
+            "html": html_content
+        })
+        print(f"📧 Email envoyé à {to_email} ! ID: {r.get('id')}")
+    except Exception as e:
+        print(f"❌ Erreur envoi email: {e}")
+
+# --- Sécurité (Password & Token) ---
+def verify_password(plain_password, hashed_password): return pwd_context.verify(plain_password, hashed_password)
+def get_password_hash(password): return pwd_context.hash(password)
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -108,11 +159,7 @@ def create_access_token(data: dict):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Non autorisé",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    credentials_exception = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Non autorisé", headers={"WWW-Authenticate": "Bearer"})
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
@@ -122,7 +169,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     if user is None: raise credentials_exception
     return user
 
-# --- SCHEMAS ---
+# ==============================================================================
+# 4. SCHEMAS PYDANTIC (Validation)
+# ==============================================================================
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -136,7 +185,8 @@ class ProductCreateSchema(BaseModel):
 
 class ProductSchema(ProductCreateSchema):
     id: int
-    class Config: from_attributes = True
+    class Config:
+        from_attributes = True
 
 class AnalyticsSchema(BaseModel):
     event_type: str
@@ -153,32 +203,33 @@ class CartItem(BaseModel):
 class CheckoutSchema(BaseModel):
     items: List[CartItem]
 
-# --- AUTH ROUTE ---
+# ==============================================================================
+# 5. ROUTES API
+# ==============================================================================
+
+# --- Debug & Auth ---
+@app.get("/debug")
+def debug_config(db: Session = Depends(get_db)):
+    current_admin = db.query(AdminUser).first()
+    return {"status": "online", "configured_user": ADMIN_USERNAME, "db_current_admin": current_admin.username if current_admin else "None"}
+
 @app.post("/api/v1/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(AdminUser).filter(AdminUser.username == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Identifiants incorrects",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Identifiants incorrects", headers={"WWW-Authenticate": "Bearer"})
     access_token = create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/api/v1/admin/me")
-async def read_users_me(current_user: AdminUser = Depends(get_current_user)):
-    return {"username": current_user.username}
+async def read_users_me(current_user: AdminUser = Depends(get_current_user)): return {"username": current_user.username}
 
-# --- PRODUITS ---
+# --- Produits (CRUD) ---
 @app.get("/api/v1/products", response_model=List[ProductSchema])
 def get_products(q: Optional[str] = None, category: Optional[str] = None, db: Session = Depends(get_db)):
     query = db.query(ProductModel)
-    if q:
-        search = f"%{q}%"
-        query = query.filter((ProductModel.name.ilike(search)) | (ProductModel.description.ilike(search)))
-    if category and category != "Tout":
-        query = query.filter(ProductModel.category == category)
+    if q: search = f"%{q}%"; query = query.filter((ProductModel.name.ilike(search)) | (ProductModel.description.ilike(search)))
+    if category and category != "Tout": query = query.filter(ProductModel.category == category)
     return query.order_by(ProductModel.id.desc()).all()
 
 @app.get("/api/v1/products/{product_id}", response_model=ProductSchema)
@@ -190,46 +241,27 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
 @app.post("/api/v1/products", response_model=ProductSchema)
 def create_product(product: ProductCreateSchema, db: Session = Depends(get_db), current_user: AdminUser = Depends(get_current_user)):
     new_product = ProductModel(**product.dict())
-    db.add(new_product)
-    db.commit()
-    db.refresh(new_product)
-    return new_product
+    db.add(new_product); db.commit(); db.refresh(new_product); return new_product
 
 @app.put("/api/v1/products/{product_id}", response_model=ProductSchema)
 def update_product(product_id: int, product: ProductCreateSchema, db: Session = Depends(get_db), current_user: AdminUser = Depends(get_current_user)):
     db_product = db.query(ProductModel).filter(ProductModel.id == product_id).first()
     if not db_product: raise HTTPException(status_code=404, detail="Produit introuvable")
-    
-    db_product.name = product.name
-    db_product.price = product.price
-    db_product.category = product.category
-    db_product.image_url = product.image_url
-    db_product.description = product.description
-    
-    db.commit()
-    db.refresh(db_product)
-    return db_product
+    for key, value in product.dict().items(): setattr(db_product, key, value)
+    db.commit(); db.refresh(db_product); return db_product
 
 @app.delete("/api/v1/products/{product_id}")
 def delete_product(product_id: int, db: Session = Depends(get_db), current_user: AdminUser = Depends(get_current_user)):
     product = db.query(ProductModel).filter(ProductModel.id == product_id).first()
     if not product: raise HTTPException(status_code=404, detail="Produit introuvable")
-    db.delete(product)
-    db.commit()
-    return {"status": "deleted"}
+    db.delete(product); db.commit(); return {"status": "deleted"}
 
-# --- ANALYTICS ---
+# --- Analytics & Dashboard ---
 @app.post("/api/v1/analytics")
 def track_event(event: AnalyticsSchema, db: Session = Depends(get_db)):
     try:
-        db.add(EventModel(
-            event_type=event.event_type,
-            user_id=event.user_id,
-            page_url=event.page_url,
-            metadata_json=json.dumps(event.metadata)
-        ))
-        db.commit()
-        return {"status": "recorded"}
+        db.add(EventModel(event_type=event.event_type, user_id=event.user_id, page_url=event.page_url, metadata_json=json.dumps(event.metadata)))
+        db.commit(); return {"status": "recorded"}
     except Exception as e: return {"status": "error", "detail": str(e)}
 
 @app.get("/api/v1/analytics/stats")
@@ -237,7 +269,8 @@ def get_analytics_stats(db: Session = Depends(get_db), current_user: AdminUser =
     total = db.query(EventModel).count()
     stats_query = db.query(EventModel.event_type, func.count(EventModel.event_type)).group_by(EventModel.event_type).all()
     stats_by_type = {type_: count for type_, count in stats_query}
-
+    
+    # Top Produits
     product_events = db.query(EventModel).filter(EventModel.event_type.in_(['view_item', 'add_to_cart'])).all()
     product_counts = {}
     for event in product_events:
@@ -248,94 +281,62 @@ def get_analytics_stats(db: Session = Depends(get_db), current_user: AdminUser =
         except: continue
     sorted_products = dict(sorted(product_counts.items(), key=lambda item: item[1], reverse=True)[:10])
 
-    funnel_data = {
-        "1_visitors": stats_by_type.get('page_view', 0),
-        "2_interested": stats_by_type.get('view_item', 0),
-        "3_converted": stats_by_type.get('add_to_cart', 0)
-    }
-    
+    funnel_data = { "1_visitors": stats_by_type.get('page_view', 0), "2_interested": stats_by_type.get('view_item', 0), "3_converted": stats_by_type.get('add_to_cart', 0) }
     total_sales = db.query(func.sum(OrderModel.total_amount)).scalar() or 0.0
     orders_count = db.query(OrderModel).count()
+    
+    # Chart 7d / 30d
+    today = datetime.now()
+    dates_7 = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(6, -1, -1)]
+    dates_30 = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(29, -1, -1)]
+    chart_7 = {d: 0 for d in dates_7}; chart_30 = {d: 0 for d in dates_30}
+    
+    all_orders = db.query(OrderModel).all()
+    for order in all_orders:
+        order_day = order.created_at[:10]
+        if order_day in chart_7: chart_7[order_day] += order.total_amount
+        if order_day in chart_30: chart_30[order_day] += order.total_amount
+            
+    sales_chart = { "7d": [{"date": d, "amount": chart_7[d]} for d in dates_7], "30d": [{"date": d, "amount": chart_30[d]} for d in dates_30] }
     recent_logs = db.query(EventModel).order_by(EventModel.created_at.desc()).limit(20).all()
     
-    return {
-        "summary": {
-            "total_events": total,
-            "total_sales": total_sales,
-            "total_orders": orders_count,
-            "breakdown": stats_by_type,
-            "top_products": sorted_products,
-            "funnel": funnel_data
-        },
-        "recent_logs": recent_logs
-    }
+    return { "summary": { "total_events": total, "total_sales": total_sales, "total_orders": orders_count, "breakdown": stats_by_type, "top_products": sorted_products, "funnel": funnel_data, "sales_chart": sales_chart }, "recent_logs": recent_logs }
 
 @app.get("/api/v1/orders")
 def get_orders(db: Session = Depends(get_db), current_user: AdminUser = Depends(get_current_user)):
     orders = db.query(OrderModel).order_by(OrderModel.created_at.desc()).limit(50).all()
     result = []
     for o in orders:
-        try:
-            items = json.loads(o.items_json)
-            address = json.loads(o.shipping_address_json) if o.shipping_address_json else {}
-        except:
-            items = []
-            address = {}
-        result.append({
-            "id": o.id,
-            "stripe_id": o.stripe_id,
-            "customer": o.customer_name,
-            "email": o.customer_email,
-            "amount": o.total_amount,
-            "status": o.status,
-            "date": o.created_at,
-            "items": items,
-            "address": address
-        })
+        try: items = json.loads(o.items_json); address = json.loads(o.shipping_address_json) if o.shipping_address_json else {}
+        except: items = []; address = {}
+        result.append({ "id": o.id, "stripe_id": o.stripe_id, "customer": o.customer_name, "email": o.customer_email, "amount": o.total_amount, "status": o.status, "date": o.created_at, "items": items, "address": address })
     return result
 
-# --- PAIEMENT ---
+# --- PAIEMENT & WEBHOOK ---
 @app.post("/api/v1/create-checkout-session")
 def create_checkout_session(cart: CheckoutSchema):
     try:
         if not stripe.api_key: raise Exception("Clé Stripe manquante")
         c_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
         if c_url.endswith('/'): c_url = c_url[:-1]
-        line_items = []
-        summary_items = [] 
+        line_items = []; summary_items = [] 
         for item in cart.items:
-            line_items.append({
-                'price_data': {
-                    'currency': 'eur',
-                    'product_data': {'name': item.name},
-                    'unit_amount': int(item.price * 100),
-                },
-                'quantity': 1,
-            })
+            line_items.append({ 'price_data': { 'currency': 'eur', 'product_data': {'name': item.name}, 'unit_amount': int(item.price * 100) }, 'quantity': 1 })
             summary_items.append(f"{item.name} ({item.price}€)")
         checkout_session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=line_items,
-            mode='payment',
-            success_url=f'{c_url}/success?session_id={{CHECKOUT_SESSION_ID}}',
-            cancel_url=f'{c_url}/cancel',
-            shipping_address_collection={"allowed_countries": ["FR", "BE", "CH", "CA"]},
-            metadata={"items_summary": json.dumps(summary_items)}
+            payment_method_types=['card'], line_items=line_items, mode='payment', success_url=f'{c_url}/success?session_id={{CHECKOUT_SESSION_ID}}', cancel_url=f'{c_url}/cancel',
+            shipping_address_collection={"allowed_countries": ["FR", "BE", "CH", "CA"]}, metadata={"items_summary": json.dumps(summary_items)}
         )
         return {"checkout_url": checkout_session.url}
-    except Exception as e:
-        print(f"Stripe Error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e: print(f"Stripe Error: {e}", flush=True); raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/v1/webhook")
-async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+async def stripe_webhook(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     payload = await request.body()
     sig_header = request.headers.get('stripe-signature')
     try:
-        if STRIPE_WEBHOOK_SECRET:
-            event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
-        else:
-            event = json.loads(payload)
+        if STRIPE_WEBHOOK_SECRET: event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+        else: event = json.loads(payload)
     except ValueError: raise HTTPException(status_code=400, detail="Invalid payload")
     except stripe.error.SignatureVerificationError: raise HTTPException(status_code=400, detail="Invalid signature")
 
@@ -348,74 +349,52 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         address_data = shipping.get('address')
         if not address_data and customer_details.get('address'): address_data = customer_details.get('address')
         if not address_data: address_data = {}
-        items_json = session.get('metadata', {}).get('items_summary', '[]')
+        items_json_str = session.get('metadata', {}).get('items_summary', '[]')
+        items_list = json.loads(items_json_str)
+
         new_order = OrderModel(
-            stripe_id=stripe_id,
-            customer_email=customer_details.get('email'),
-            customer_name=customer_details.get('name'),
-            total_amount=amount,
-            status="paid",
-            items_json=items_json,
-            shipping_address_json=json.dumps(address_data)
+            stripe_id=stripe_id, customer_email=customer_details.get('email'), customer_name=customer_details.get('name'), total_amount=amount, status="paid",
+            items_json=items_json_str, shipping_address_json=json.dumps(address_data)
         )
         db.add(new_order)
         
-        # Analytics Purchase
-        purchase_event = EventModel(
-            event_type="purchase",
-            user_id=customer_details.get('email') or "anonyme",
-            page_url="/checkout/success",
-            metadata_json=json.dumps({"amount": amount})
-        )
+        purchase_event = EventModel(event_type="purchase", user_id=customer_details.get('email') or "anonyme", page_url="/checkout/success", metadata_json=json.dumps({"amount": amount}))
         db.add(purchase_event)
-        
         db.commit()
+
+        # Envoi email en tâche de fond (Background)
+        if customer_details.get('email'):
+            background_tasks.add_task(
+                send_confirmation_email,
+                to_email=customer_details.get('email'),
+                name=customer_details.get('name') or "Client",
+                amount=amount,
+                items=items_list,
+                address=address_data
+            )
+
     return {"status": "success"}
 
-# --- NETTOYAGE & SEED FORCÉ ---
+# --- INIT & SEED ---
 def force_reset_admin(db: Session):
-    # 🧹 On supprime tous les anciens admins pour être sûr
-    deleted = db.query(AdminUser).delete()
-    if deleted > 0:
-        print(f"🧹 Nettoyage : {deleted} ancien(s) admin(s) supprimé(s).")
-    
-    # 🆕 On crée le nouveau
+    deleted = db.query(AdminUser).delete(); print(f"🧹 ADMIN CLEANUP: {deleted} comptes.", flush=True)
     admin = AdminUser(username=ADMIN_USERNAME, hashed_password=get_password_hash(ADMIN_PASSWORD))
-    db.add(admin)
-    db.commit()
-    print(f"👑 ADMIN RECRÉÉ -> Login: {ADMIN_USERNAME} / Pass: {ADMIN_PASSWORD}")
+    db.add(admin); db.commit(); print(f"👑 ADMIN RESET: {ADMIN_USERNAME}", flush=True)
 
 @app.post("/api/v1/seed")
 def seed_database(db: Session = Depends(get_db)):
     if db.query(ProductModel).count() == 0:
-        products = [
-            ProductModel(name="iPhone 15 Pro", price=1299.0, category="Smartphone", image_url="https://images.unsplash.com/photo-1696446701796-da61225697cc?w=800", description="Titane pur."),
-            ProductModel(name="MacBook Air M2", price=1499.0, category="Ordinateur", image_url="https://images.unsplash.com/photo-1517336714731-489689fd1ca4?w=800", description="Puce M2."),
-        ]
+        products = [ ProductModel(name="iPhone 15 Pro", price=1299.0, category="Smartphone", image_url="https://images.unsplash.com/photo-1696446701796-da61225697cc?w=800", description="Titane pur."), ProductModel(name="MacBook Air M2", price=1499.0, category="Ordinateur", image_url="https://images.unsplash.com/photo-1517336714731-489689fd1ca4?w=800", description="Puce M2.") ]
         db.add_all(products)
-    
-    # Fake Analytics
     if db.query(EventModel).count() == 0:
         events = []
         for _ in range(50): events.append(EventModel(event_type="page_view", user_id="visitor", page_url="/"))
-        for _ in range(20): events.append(EventModel(event_type="view_item", user_id="visitor", page_url="/product", metadata_json="{}"))
-        for _ in range(5): events.append(EventModel(event_type="add_to_cart", user_id="visitor", page_url="/cart", metadata_json="{}"))
         db.add_all(events)
-
-    db.commit()
-    
-    # On force la réinitialisation de l'admin même dans le seed manuel
-    force_reset_admin(db)
-    return {"message": "DB seeded & Admin Reset"}
+    db.commit(); force_reset_admin(db); return {"message": "DB seeded"}
 
 @app.on_event("startup")
 def startup_event():
-    db = SessionLocal()
-    # 1. On lance le seed normal (produits, stats)
-    seed_database(db)
-    # 2. On lance la méthode nucléaire pour l'admin
-    force_reset_admin(db)
-    db.close()
+    db = SessionLocal(); seed_database(db); force_reset_admin(db); db.close()
 
 if __name__ == "__main__":
     import uvicorn
