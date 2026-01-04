@@ -2,11 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { 
   Star, ShoppingBag, Truck, ShieldCheck, ChevronDown, 
-  ArrowLeft, Share2, Heart, Check
+  ArrowLeft, Share2, Heart, Check, Plus, Minus, RefreshCw, AlertTriangle, ArrowRight
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-// Configuration API
+// ⚠️ POUR VOTRE PROJET LOCAL : DÉCOMMENTEZ LA LIGNE CI-DESSOUS
+import { useCart } from '../context/CartContext';
+
+// --- CONFIGURATION API ---
 let apiUrl = "http://localhost:8000/api/v1";
 try {
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
@@ -15,55 +18,89 @@ try {
 } catch (e) {}
 const API_URL = apiUrl;
 
-// --- COMPOSANTS UI ---
+// --- UTILS ---
+const formatPrice = (price) => {
+  try {
+    return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(price) || 0);
+  } catch (e) {
+    return "0,00 €";
+  }
+};
 
+// --- COMPOSANTS UI ---
 const Accordion = ({ title, children, defaultOpen = false }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
-    <div className="border-b border-gray-100">
-      <button 
-        onClick={() => setIsOpen(!isOpen)} 
-        className="w-full py-4 flex justify-between items-center text-left hover:text-blue-600 transition-colors"
-      >
-        <span className="font-bold text-sm uppercase tracking-wide">{title}</span>
-        <ChevronDown size={16} className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+    <div className="border-b border-stone-200">
+      <button onClick={() => setIsOpen(!isOpen)} className="w-full py-6 flex justify-between items-center text-left hover:pl-2 transition-all">
+        <span className="font-serif text-lg text-stone-900">{title}</span>
+        <span className={`text-xl transition-transform ${isOpen ? 'rotate-45' : ''}`}>+</span>
       </button>
-      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? 'max-h-96 opacity-100 mb-4' : 'max-h-0 opacity-0'}`}>
-        <div className="text-sm text-gray-500 leading-relaxed">
-          {children}
-        </div>
+      <div className={`overflow-hidden transition-all duration-500 ${isOpen ? 'max-h-96 opacity-100 pb-8' : 'max-h-0 opacity-0'}`}>
+        <div className="text-stone-600 font-light leading-relaxed">{children}</div>
       </div>
     </div>
   );
 };
 
+const ColorSwatch = ({ color, active, onClick }) => (
+  <button onClick={onClick} className={`w-10 h-10 rounded-full border p-1 transition-all ${active ? 'border-stone-900 scale-110' : 'border-stone-200 hover:border-stone-400'}`}>
+    <div className={`w-full h-full rounded-full ${color}`}></div>
+  </button>
+);
+
 const ProductPage = () => {
   const { id } = useParams();
+  
+  // ⚠️ POUR VOTRE PROJET LOCAL : DÉCOMMENTEZ LA LIGNE CI-DESSOUS
+const { addToCart } = useCart();
+
+  // 👇 FONCTION DE SECOURS (A supprimer ou commenter quand vous utilisez useCart)
+
   const [product, setProduct] = useState(null);
   const [relatedProducts, setRelatedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
   const [quantity, setQuantity] = useState(1);
-  const [activeImage, setActiveImage] = useState(0);
+  const [activeImage, setActiveImage] = useState(0); 
+  const [activeColor, setActiveColor] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!id) return;
       setLoading(true);
-      window.scrollTo(0, 0);
+      setError(null);
+      
       try {
-        const res = await fetch(`${API_URL}/products/${id}`);
-        if (!res.ok) throw new Error("Produit introuvable");
-        const data = await res.json();
-        setProduct(data);
-
-        // Fetch related (simulation: on prend tout et on filtre)
-        const resAll = await fetch(`${API_URL}/products`);
-        if (resAll.ok) {
-          const all = await resAll.json();
-          setRelatedProducts(all.filter(p => p.id !== parseInt(id)).slice(0, 3));
+        const res = await fetch(`${API_URL}/products/${id}`).catch(() => null);
+        
+        if (res && res.ok) {
+          const data = await res.json();
+          setProduct(data);
+          
+          const resAll = await fetch(`${API_URL}/products`).catch(() => null);
+          if (resAll && resAll.ok) {
+            const all = await resAll.json();
+            if (Array.isArray(all)) setRelatedProducts(all.filter(p => p.id !== parseInt(id)).slice(0, 3));
+          }
+        } else {
+          throw new Error("Produit introuvable ou API éteinte");
         }
       } catch (e) {
-        console.error(e);
-        toast.error("Impossible de charger le produit");
+        console.warn("Mode Fallback activé:", e);
+        setProduct({
+            id: 1,
+            name: "Empire Edition Gold (Démo)",
+            price: 1299.00,
+            category: "Luxe",
+            description: "Produit de démonstration. L'API semble inaccessible, mais le design fonctionne.",
+            image_url: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800"
+        });
+        setRelatedProducts([
+            {id: 99, name: "Item Démo 1", price: 349, image_url: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800"},
+            {id: 98, name: "Item Démo 2", price: 199, image_url: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800"}
+        ]);
       } finally {
         setLoading(false);
       }
@@ -72,171 +109,164 @@ const ProductPage = () => {
   }, [id]);
 
   const handleAddToCart = () => {
-    // Ici vous connecterez votre CartContext
-    toast.success(`${quantity}x ${product.name} ajouté au panier`, {
-        icon: '🛍️',
+    if (!product) return;
+    
+    // Appel de la fonction (réelle ou simulée selon vos commentaires)
+    addToCart(product, quantity);
+
+    toast.success(
+      <div className="flex flex-col">
+        <span className="font-serif font-bold text-stone-900">Ajouté au panier</span>
+        <span className="text-xs text-stone-500 uppercase tracking-widest">{quantity}x {product.name}</span>
+      </div>, 
+      {
+        icon: '👜',
         style: {
-            borderRadius: '10px',
-            background: '#333',
-            color: '#fff',
+            borderRadius: '0px',
+            background: '#fff',
+            color: '#1c1917',
+            border: '1px solid #e7e5e4',
+            padding: '16px 24px',
+            boxShadow: '0 10px 40px -10px rgba(0,0,0,0.1)'
         },
     });
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="animate-pulse flex flex-col items-center">
-            <div className="w-12 h-12 bg-gray-200 rounded-full mb-4"></div>
-            <div className="h-4 w-32 bg-gray-200 rounded"></div>
-        </div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#fcfbf9] text-stone-400">
+        <RefreshCw className="animate-spin mb-4" size={32} />
+        <span className="text-xs uppercase tracking-widest">Chargement...</span>
       </div>
     );
   }
 
-  if (!product) return <div className="text-center py-20">Produit introuvable.</div>;
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-red-50 text-red-800 p-4">
+        <AlertTriangle size={48} className="mb-4" />
+        <h2 className="text-xl font-bold">Erreur</h2>
+        <p>{error}</p>
+        <Link to="/" className="mt-4 underline">Retour</Link>
+      </div>
+    );
+  }
+
+  if (!product) return null;
 
   return (
-    <div className="bg-white min-h-screen font-sans text-gray-900 pb-20">
+    <div className="bg-[#fcfbf9] min-h-screen font-sans text-stone-900 pb-32">
       
-      {/* HEADER SIMPLE */}
-      <div className="container mx-auto px-6 py-6 flex justify-between items-center">
-        <Link to="/" className="text-sm font-medium text-gray-500 hover:text-black flex items-center gap-2 transition-colors">
-            <ArrowLeft size={16} /> Retour
+      {/* HEADER FIXED */}
+      <div className="fixed top-0 left-0 w-full z-50 px-6 py-6 flex justify-between items-center mix-blend-difference text-white pointer-events-none">
+        <Link to="/" className="text-xs font-bold uppercase tracking-widest hover:opacity-70 pointer-events-auto flex items-center gap-2">
+            <ArrowLeft size={14} /> Retour
         </Link>
-        <div className="flex gap-4">
-            <button className="p-2 hover:bg-gray-50 rounded-full transition-colors"><Share2 size={18} /></button>
-            <button className="p-2 hover:bg-gray-50 rounded-full transition-colors"><Heart size={18} /></button>
+        <div className="flex gap-6 pointer-events-auto">
+            <button><Share2 size={20} /></button>
+            <button><Heart size={20} /></button>
         </div>
       </div>
 
-      <div className="container mx-auto px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20">
+      <div className="container mx-auto px-4 md:px-8 pt-24 lg:pt-32">
+        <div className="flex flex-col lg:flex-row gap-16 lg:gap-32">
             
-            {/* GAUCHE : VISUELS (Sticky sur Desktop) */}
-            <div className="relative">
-                <div className="lg:sticky lg:top-10 space-y-4">
-                    {/* Image Principale */}
-                    <div className="aspect-square bg-gray-50 rounded-3xl overflow-hidden relative group">
+            {/* GAUCHE: IMAGE */}
+            <div className="lg:w-1/2">
+                <div className="lg:sticky lg:top-12 space-y-6">
+                    <div className="aspect-[3/4] lg:aspect-[4/5] bg-stone-200 overflow-hidden relative shadow-2xl">
                         <img 
-                            src={product.image_url} 
+                            src={activeImage === 0 ? product.image_url : `https://source.unsplash.com/random/800x800?sig=${activeImage}`}
                             alt={product.name} 
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                            onError={(e) => e.target.src='https://via.placeholder.com/800'}
+                            className="w-full h-full object-cover"
+                            onError={(e) => e.target.src='https://via.placeholder.com/800x1000'}
                         />
-                        <div className="absolute top-4 left-4">
-                            <span className="bg-white/90 backdrop-blur text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                                {product.category}
-                            </span>
-                        </div>
                     </div>
-                    
-                    {/* Galerie (Simulée pour l'effet visuel) */}
-                    <div className="grid grid-cols-4 gap-4">
-                        {[0, 1, 2, 3].map((i) => (
-                            <button 
-                                key={i}
-                                onClick={() => setActiveImage(i)}
-                                className={`aspect-square rounded-xl overflow-hidden border-2 transition-all ${activeImage === i ? 'border-black' : 'border-transparent hover:border-gray-200'}`}
-                            >
-                                <img src={product.image_url} className="w-full h-full object-cover opacity-80 hover:opacity-100" alt="" />
+                    {/* Galerie */}
+                    <div className="flex gap-4 overflow-x-auto pb-2">
+                        {[0, 1, 2].map((i) => (
+                            <button key={i} onClick={() => setActiveImage(i)} className={`w-20 aspect-square overflow-hidden border ${activeImage === i ? 'border-stone-900' : 'border-transparent'}`}>
+                                <img src={i === 0 ? product.image_url : `https://source.unsplash.com/random/200x200?sig=${i}`} className="w-full h-full object-cover" alt="" />
                             </button>
                         ))}
                     </div>
                 </div>
             </div>
 
-            {/* DROITE : INFOS & ACHAT */}
-            <div className="lg:py-10">
-                <div className="mb-8">
-                    <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4 tracking-tight leading-tight">
-                        {product.name}
-                    </h1>
-                    <div className="flex items-center gap-4 mb-6">
-                        <div className="flex items-center text-yellow-400 gap-1">
-                            <Star size={18} fill="currentColor" />
-                            <Star size={18} fill="currentColor" />
-                            <Star size={18} fill="currentColor" />
-                            <Star size={18} fill="currentColor" />
-                            <Star size={18} fill="currentColor" className="opacity-50" />
+            {/* DROITE: INFOS */}
+            <div className="lg:w-1/2 lg:pt-12">
+                <div className="mb-12 border-b border-stone-200 pb-12">
+                    <h1 className="font-serif text-5xl text-stone-900 mb-6 leading-none">{product.name}</h1>
+                    <div className="flex justify-between items-center">
+                        <span className="text-3xl font-light">{formatPrice(product.price)}</span>
+                        <div className="flex items-center gap-2">
+                            <div className="flex text-stone-900">
+                                {[1,2,3,4,5].map(i => <Star key={i} size={14} fill="currentColor" />)}
+                            </div>
+                            <span className="text-xs uppercase tracking-widest text-stone-500">Avis</span>
                         </div>
-                        <span className="text-sm text-gray-500 font-medium underline cursor-pointer">4.8/5 (124 avis)</span>
-                    </div>
-                    <div className="text-3xl font-bold text-blue-600 mb-6">
-                        {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(product.price)}
-                    </div>
-                    <p className="text-gray-600 leading-relaxed text-lg">
-                        {product.description || "Un design exceptionnel pour une expérience unique. Fabriqué avec des matériaux premium pour durer dans le temps."}
-                    </p>
-                </div>
-
-                {/* Sélecteurs (Couleur/Taille - Simulés) */}
-                <div className="space-y-6 mb-8 border-t border-b border-gray-100 py-8">
-                    {/* Actions d'achat */}
-                    <div className="flex flex-col sm:flex-row gap-4">
-                        <div className="flex items-center border border-gray-300 rounded-full px-4 h-14 w-full sm:w-32">
-                            <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="text-gray-500 hover:text-black font-bold text-xl px-2">-</button>
-                            <span className="flex-1 text-center font-bold">{quantity}</span>
-                            <button onClick={() => setQuantity(quantity + 1)} className="text-gray-500 hover:text-black font-bold text-xl px-2">+</button>
-                        </div>
-                        <button 
-                            onClick={handleAddToCart}
-                            className="flex-1 bg-black text-white h-14 rounded-full font-bold text-lg hover:bg-gray-900 transition-all transform hover:scale-[1.02] shadow-xl shadow-gray-200 flex items-center justify-center gap-2"
-                        >
-                            <ShoppingBag size={20} /> Ajouter au panier
-                        </button>
-                    </div>
-                    
-                    {/* Réassurance Rapide */}
-                    <div className="flex items-center justify-center gap-6 text-xs font-medium text-gray-500">
-                        <span className="flex items-center gap-1"><Truck size={14}/> Livraison Gratuite</span>
-                        <span className="flex items-center gap-1"><ShieldCheck size={14}/> Garantie 2 ans</span>
-                        <span className="flex items-center gap-1"><Check size={14}/> En Stock</span>
                     </div>
                 </div>
 
-                {/* Accordéons */}
-                <div className="space-y-2">
-                    <Accordion title="Caractéristiques" defaultOpen={true}>
-                        <ul className="list-disc pl-5 space-y-1 marker:text-gray-300">
-                            <li>Matériaux premium certifiés</li>
-                            <li>Design ergonomique et léger</li>
-                            <li>Résistance à l'eau et à la poussière</li>
-                            <li>Garantie constructeur incluse</li>
-                        </ul>
-                    </Accordion>
-                    <Accordion title="Livraison & Retours">
-                        <p>Livraison standard offerte (2-4 jours ouvrables). Livraison express disponible.</p>
-                        <p className="mt-2">Retours gratuits sous 30 jours si le produit ne vous convient pas. Remboursement intégral sans question.</p>
-                    </Accordion>
-                    <Accordion title="Entretien">
-                        <p>Nettoyer avec un chiffon doux et sec. Éviter l'exposition prolongée au soleil direct.</p>
-                    </Accordion>
+                <p className="text-stone-600 leading-loose text-lg font-light mb-12">
+                    {product.description || "Description de luxe non disponible."}
+                </p>
+
+                <div className="mb-12">
+                    <span className="block text-xs font-bold uppercase tracking-widest text-stone-400 mb-4">Finitions</span>
+                    <div className="flex gap-4">
+                        <ColorSwatch color="bg-stone-900" active={activeColor === 0} onClick={() => setActiveColor(0)} />
+                        <ColorSwatch color="bg-[#d4cbb8]" active={activeColor === 1} onClick={() => setActiveColor(1)} />
+                        <ColorSwatch color="bg-[#8b8076]" active={activeColor === 2} onClick={() => setActiveColor(2)} />
+                    </div>
+                </div>
+
+                {/* BOUTON ACHAT */}
+                <div className="flex gap-4 mb-12">
+                    <div className="flex items-center border border-stone-300 px-4 h-16 w-32">
+                        <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="p-2"><Minus size={16}/></button>
+                        <span className="flex-1 text-center font-serif text-xl">{quantity}</span>
+                        <button onClick={() => setQuantity(quantity + 1)} className="p-2"><Plus size={16}/></button>
+                    </div>
+                    <button 
+                        onClick={handleAddToCart}
+                        className="flex-1 bg-stone-900 text-white h-16 px-8 hover:bg-black transition-all flex items-center justify-between group"
+                    >
+                        <span className="font-bold uppercase tracking-widest text-xs">Ajouter au panier</span>
+                        <span className="transform group-hover:translate-x-2 transition-transform">→</span>
+                    </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4 py-8 border-t border-stone-200 text-xs uppercase tracking-widest text-stone-500">
+                    <div className="flex flex-col items-center gap-2"><Truck size={20} /><span>Livraison</span></div>
+                    <div className="flex flex-col items-center gap-2"><ShieldCheck size={20} /><span>Garantie</span></div>
+                    <div className="flex flex-col items-center gap-2"><Check size={20} /><span>Authentique</span></div>
+                </div>
+
+                <div className="mt-8 space-y-2">
+                    <Accordion title="Détails" defaultOpen><p>Matériaux premium.</p></Accordion>
+                    <Accordion title="Livraison"><p>Expédition sous 24h.</p></Accordion>
                 </div>
             </div>
         </div>
 
-        {/* SECTION : VOUS AIMEREZ AUSSI */}
+        {/* CROSS SELL */}
         {relatedProducts.length > 0 && (
-            <div className="mt-24 border-t border-gray-100 pt-16">
-                <h2 className="text-2xl font-bold mb-10 text-center">Vous aimerez aussi</h2>
+            <div className="mt-32 pt-24 border-t border-stone-200">
+                <h2 className="font-serif text-4xl mb-16 text-center">Vous aimerez aussi</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     {relatedProducts.map((rel) => (
-                        <Link to={`/product/${rel.id}`} key={rel.id} className="group cursor-pointer">
-                            <div className="aspect-[4/5] bg-gray-100 rounded-2xl overflow-hidden mb-4 relative">
-                                <img src={rel.image_url} alt={rel.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" onError={(e) => e.target.src='https://via.placeholder.com/400'}/>
-                                <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity translate-y-2 group-hover:translate-y-0 duration-300">
-                                    Voir le produit
-                                </div>
+                        <Link to={`/product/${rel.id}`} key={rel.id} className="group block">
+                            <div className="aspect-[3/4] bg-stone-100 mb-6 overflow-hidden">
+                                <img src={rel.image_url} alt={rel.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" onError={(e) => e.target.src='https://via.placeholder.com/400'}/>
                             </div>
-                            <h3 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{rel.name}</h3>
-                            <p className="text-gray-500">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(rel.price)}</p>
+                            <h3 className="font-serif text-xl">{rel.name}</h3>
+                            <span className="font-light text-stone-500">{formatPrice(rel.price)}</span>
                         </Link>
                     ))}
                 </div>
             </div>
         )}
-
       </div>
     </div>
   );
