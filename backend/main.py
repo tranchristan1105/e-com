@@ -503,23 +503,27 @@ def force_reset_admin(db: Session):
 
 @app.post("/api/v1/seed")
 def seed_database(db: Session = Depends(get_db)):
-    # Si on est en Prod (PostgreSQL), on ne veut probablement pas écraser les données réelles.
-    # On ajoute des produits seulement s'il n'y en a pas.
-    if db.query(ProductModel).count() == 0:
-        p1 = ProductModel(name="Empire Edition Gold", price=1299.0, category="Horlogerie", image_url="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800", description="L'excellence.")
-        p2 = ProductModel(name="MacBook Air M2", price=1499.0, category="Tech", image_url="https://images.unsplash.com/photo-1517336714731-489689fd1ca4?w=800", description="Puce M2.")
-        db.add_all([p1, p2])
-        db.commit()
-        
-        # Ajout de faux avis pour la démo
-        reviews = [
-            ReviewModel(product_id=p1.id, author="Jean D.", rating=5, comment="Incroyable qualité."),
-            ReviewModel(product_id=p1.id, author="Sophie M.", rating=4, comment="Très beau produit."),
-            ReviewModel(product_id=p2.id, author="Lucas V.", rating=5, comment="Machine de guerre.")
-        ]
-        db.add_all(reviews)
-        db.commit()
+    # ⚠️ MODIFICATION IMPORTANTE :
+    # Si on est en Prod (PostgreSQL) et que DATABASE_URL est présent,
+    # on NE crée PAS de produits automatiquement.
+    # Cela évite de ré-ajouter les produits "random" si vous avez tout effacé.
+    if not DATABASE_URL:
+        if db.query(ProductModel).count() == 0:
+            p1 = ProductModel(name="Empire Edition Gold", price=1299.0, category="Horlogerie", image_url="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800", description="L'excellence.")
+            p2 = ProductModel(name="MacBook Air M2", price=1499.0, category="Tech", image_url="https://images.unsplash.com/photo-1517336714731-489689fd1ca4?w=800", description="Puce M2.")
+            db.add_all([p1, p2])
+            db.commit()
+            
+            # Avis de démo seulement en local
+            reviews = [
+                ReviewModel(product_id=p1.id, author="Jean D.", rating=5, comment="Incroyable qualité."),
+                ReviewModel(product_id=p1.id, author="Sophie M.", rating=4, comment="Très beau produit."),
+                ReviewModel(product_id=p2.id, author="Lucas V.", rating=5, comment="Machine de guerre.")
+            ]
+            db.add_all(reviews)
+            db.commit()
 
+    # On force toujours la mise à jour de l'admin
     force_reset_admin(db)
     return {"message": "DB seeded & Admin Reset"}
 
