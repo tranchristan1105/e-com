@@ -110,25 +110,103 @@ app.add_middleware(
 # 3. UTILITAIRES & FONCTIONS
 # ==============================================================================
 
-# --- Emails (Resend) ---
+# --- Emails (Resend) - DESIGN PREMIUM ---
 def create_email_html(customer_name, amount, items_list, address):
-    items_html = "".join([f"<li style='margin-bottom: 5px;'>{item}</li>" for item in items_list])
+    # Création d'une liste propre avec des bordures légères
+    items_html = "".join([
+        f"""
+        <li style='padding: 12px 0; border-bottom: 1px solid #f1f5f9; list-style: none; display: flex; justify-content: space-between; color: #475569;'>
+            <span style='font-weight: 500;'>{item}</span>
+            <span style='color: #2563eb;'>✔</span>
+        </li>
+        """ for item in items_list
+    ])
+    
     return f"""
     <!DOCTYPE html>
     <html>
-    <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f4; padding: 20px;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 40px; border-radius: 10px;">
-            <h1 style="color: #2563eb; text-align: center;">Empire Store</h1>
-            <h2 style="color: #333;">Merci {customer_name} ! 🎉</h2>
-            <p style="color: #666;">Nous avons bien reçu votre commande.</p>
-            <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 30px 0;">
-                <h3>Récapitulatif</h3>
-                <ul>{items_html}</ul>
-                <p><strong>Total : {amount} €</strong></p>
-            </div>
-            <p><strong>Adresse de livraison :</strong><br>
-            {address.get('line1', '')}<br>{address.get('postal_code', '')} {address.get('city', '')}<br>{address.get('country', '')}</p>
-        </div>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        </style>
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: 'Inter', Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+            <tr>
+                <td align="center" style="padding: 40px 0;">
+                    
+                    <!-- Carte Principale -->
+                    <table role="presentation" style="width: 100%; max-width: 600px; background-color: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05); border: 1px solid #f1f5f9;">
+                        
+                        <!-- Header / Bannière -->
+                        <tr>
+                            <td style="padding: 40px 40px 30px 40px; background: linear-gradient(135deg, #111827 0%, #1f2937 100%); text-align: center;">
+                                <h1 style="margin: 0; color: #ffffff; font-size: 28px; letter-spacing: -0.5px; font-weight: 800;">EMPIRE.</h1>
+                                <p style="margin: 10px 0 0 0; color: #9ca3af; font-size: 14px; text-transform: uppercase; letter-spacing: 2px;">Confirmation de commande</p>
+                            </td>
+                        </tr>
+
+                        <!-- Contenu -->
+                        <tr>
+                            <td style="padding: 40px;">
+                                <h2 style="margin: 0 0 15px 0; color: #1e293b; font-size: 24px; font-weight: 700; text-align: center;">Merci {customer_name} ! 🚀</h2>
+                                <p style="margin: 0 0 30px 0; color: #64748b; font-size: 16px; line-height: 1.6; text-align: center;">
+                                    Votre commande a bien été reçue. Nous préparons votre colis avec le plus grand soin.
+                                </p>
+
+                                <!-- Bloc Récapitulatif -->
+                                <div style="background-color: #f8fafc; border-radius: 16px; padding: 30px; margin-bottom: 30px; border: 1px solid #e2e8f0;">
+                                    <h3 style="margin: 0 0 15px 0; color: #0f172a; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;">Votre Sélection</h3>
+                                    <ul style="padding: 0; margin: 0;">
+                                        {items_html}
+                                    </ul>
+                                    <div style="margin-top: 20px; padding-top: 20px; border-top: 2px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center;">
+                                        <span style="color: #64748b; font-weight: 600;">Total payé</span>
+                                        <span style="color: #0f172a; font-size: 28px; font-weight: 800;">{amount} €</span>
+                                    </div>
+                                </div>
+
+                                <!-- Bloc Livraison -->
+                                <div style="background-color: #eff6ff; border-radius: 16px; padding: 25px; border: 1px solid #bfdbfe; display: flex; align-items: start;">
+                                    <div style="font-size: 24px; margin-right: 15px;">📦</div>
+                                    <div>
+                                        <h3 style="margin: 0 0 5px 0; color: #1e40af; font-size: 15px; font-weight: 700;">Adresse de livraison</h3>
+                                        <p style="margin: 0; color: #1e3a8a; font-size: 15px; line-height: 1.5;">
+                                            {address.get('line1', '')}<br>
+                                            {address.get('postal_code', '')} {address.get('city', '')}<br>
+                                            <span style="font-weight: 600; text-transform: uppercase;">{address.get('country', '')}</span>
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <!-- Bouton Action -->
+                                <div style="text-align: center; margin-top: 40px;">
+                                    <a href="{frontend_url}" style="background-color: #000000; color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 50px; font-weight: 600; font-size: 16px; display: inline-block; transition: transform 0.2s;">
+                                        Retourner à la boutique
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- Footer -->
+                        <tr>
+                            <td style="padding: 30px; background-color: #f8fafc; text-align: center; border-top: 1px solid #f1f5f9;">
+                                <p style="margin: 0; color: #94a3b8; font-size: 12px; line-height: 1.5;">
+                                    Une question ? Répondez simplement à cet email.<br>
+                                    © 2024 Empire Store. Tous droits réservés.
+                                </p>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <div style="margin-top: 20px; color: #cbd5e1; font-size: 12px; text-align: center;">
+                        Envoyé avec ❤️ par votre API Empire
+                    </div>
+
+                </td>
+            </tr>
+        </table>
     </body>
     </html>
     """

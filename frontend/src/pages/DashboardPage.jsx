@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { 
   BarChart3, Users, MousePointer, ShoppingBag, ArrowLeft, Trophy, 
   Package, MapPin, Plus, Trash2, X, RefreshCw, AlertOctagon, ArrowRight, Tag, Image as ImageIcon,
-  Lock, LogOut, LayoutDashboard, Pencil, TrendingUp, Calendar
+  Lock, LogOut, LayoutDashboard, Pencil, TrendingUp, Search, Bell, ChevronDown, Filter, MoreHorizontal
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 
-// Gestion sécurisée de l'URL API (Compatible ES2015/Vite)
+// --- CONFIGURATION ---
 let apiUrl = "http://localhost:8000/api/v1";
 try {
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
@@ -16,9 +16,12 @@ try {
 } catch (e) {}
 const API_URL = apiUrl;
 
-// --- COMPOSANTS UI ---
+// --- UTILS UI ---
+const formatPrice = (price) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(price || 0);
+const formatDate = (dateString) => new Date(dateString).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+// --- LOGIN SCREEN (Redesign Épuré) ---
 const LoginScreen = ({ onLogin }) => {
-  // ... (Code Login inchangé)
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,99 +34,147 @@ const LoginScreen = ({ onLogin }) => {
     formData.append('password', password);
     try {
       const res = await fetch(`${API_URL}/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: formData });
-      if (!res.ok) throw new Error("Identifiants incorrects");
+      if (!res.ok) throw new Error("Accès refusé");
       const data = await res.json();
       onLogin(data.access_token);
-      toast.success("Connexion réussie");
+      toast.success("Bienvenue, CEO.");
     } catch (err) { toast.error(err.message); } finally { setLoading(false); }
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center">
-        <div className="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-lg shadow-blue-200"><Lock size={32} /></div>
-        <h1 className="text-2xl font-bold text-slate-900 mb-6">Empire Dashboard</h1>
-        <form onSubmit={handleSubmit} className="space-y-5 text-left">
-          <input className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500" type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="Utilisateur" required />
-          <input className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Mot de passe" required />
-          <button type="submit" disabled={loading} className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl hover:bg-slate-800 transition-all">{loading ? "..." : "Se connecter"}</button>
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 font-sans text-gray-900">
+      <div className="w-full max-w-md bg-white p-10 rounded-3xl shadow-2xl shadow-gray-200/50 border border-gray-100">
+        <div className="text-center mb-10">
+          <div className="w-16 h-16 bg-black text-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg transform rotate-3">
+            <LayoutDashboard size={32} />
+          </div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">Empire OS</h1>
+          <p className="text-gray-500 mt-2 font-medium">Connectez-vous à votre quartier général.</p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-1">Identifiant</label>
+            <input className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all font-medium" type="text" value={username} onChange={e => setUsername(e.target.value)} required />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-1">Mot de passe</label>
+            <input className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all font-medium" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+          </div>
+          <button type="submit" disabled={loading} className="w-full bg-black text-white font-bold py-4 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-gray-400/20 disabled:opacity-70 disabled:hover:scale-100 flex justify-center">
+            {loading ? <RefreshCw className="animate-spin" /> : "Initialiser le système"}
+          </button>
         </form>
+      </div>
+      <p className="mt-8 text-xs text-gray-400 font-mono">SECURED BY EMPIRE TECHNOLOGY • V1.0</p>
+    </div>
+  );
+};
+
+// --- COMPOSANTS DU DASHBOARD ---
+
+const SidebarItem = ({ icon: Icon, label, active, onClick }) => (
+  <button 
+    onClick={onClick}
+    className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group ${
+      active 
+        ? 'bg-white text-black shadow-sm font-semibold' 
+        : 'text-gray-400 hover:text-white hover:bg-white/5 font-medium'
+    }`}
+  >
+    <Icon size={20} className={`transition-colors ${active ? 'text-blue-600' : 'text-gray-500 group-hover:text-white'}`} />
+    <span>{label}</span>
+    {active && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+  </button>
+);
+
+const KPICard = ({ title, value, trend, icon: Icon, colorClass }) => (
+  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
+    <div className="flex justify-between items-start mb-4">
+      <div className={`p-3 rounded-xl ${colorClass} bg-opacity-10 text-opacity-100 group-hover:scale-110 transition-transform`}>
+        <Icon size={24} className={colorClass.replace('bg-', 'text-')} />
+      </div>
+      {trend && (
+        <span className="flex items-center text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full">
+          <TrendingUp size={12} className="mr-1" /> {trend}
+        </span>
+      )}
+    </div>
+    <div>
+      <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
+      <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight">{value}</h3>
+    </div>
+  </div>
+);
+
+const Chart = ({ data }) => {
+  if (!data || data.length === 0) return <div className="h-64 flex items-center justify-center text-gray-300 font-medium bg-gray-50 rounded-2xl border border-dashed border-gray-200">Données insuffisantes</div>;
+  const maxVal = Math.max(...data.map(d => d.amount), 100);
+  const points = data.map((d, i) => `${(i / (data.length - 1)) * 100},${100 - (d.amount / maxVal) * 100}`).join(' ');
+
+  return (
+    <div className="w-full h-72 relative group cursor-crosshair">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
+        <defs>
+          <linearGradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.2"/>
+            <stop offset="100%" stopColor="#3B82F6" stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d={`M0,100 ${points} V100 H0 Z`} fill="url(#chartGradient)" />
+        <polyline points={points} fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" vectorEffect="non-scaling-stroke" className="drop-shadow-lg" />
+      </svg>
+      {/* Tooltip Overlay (Mock) */}
+      <div className="absolute inset-0 flex items-end justify-between px-2 pb-2 opacity-0 group-hover:opacity-100 transition-opacity">
+         {data.filter((_, i) => i % Math.ceil(data.length/6) === 0).map((d, i) => (
+             <div key={i} className="text-xs text-gray-400 font-medium">{new Date(d.date).toLocaleDateString('fr', {day:'numeric', month:'short'})}</div>
+         ))}
       </div>
     </div>
   );
 };
 
-// COMPOSANT GRAPHIQUE SVG (Adaptatif)
-const SalesChart = ({ data }) => {
-    if (!data || data.length === 0) return <div className="h-40 flex items-center justify-center text-slate-400">Pas de données</div>;
-    
-    const maxVal = Math.max(...data.map(d => d.amount), 100); 
-    const points = data.map((d, i) => {
-        const x = (i / (data.length - 1)) * 100;
-        const y = 100 - (d.amount / maxVal) * 100;
-        return `${x},${y}`;
-    }).join(' ');
+const TunnelRow = ({ label, val, total, color }) => (
+    <div className="relative h-12 w-full bg-slate-50 rounded-xl overflow-hidden flex items-center px-4 mb-3">
+        <div className={`absolute left-0 top-0 h-full ${color}`} style={{ width: `${total > 0 ? (val/total)*100 : 0}%`, opacity: 0.5, transition: 'width 1s ease-in-out' }}></div>
+        <span className="relative z-10 font-bold text-slate-700 w-1/3 text-sm">{label}</span>
+        <span className="relative z-10 font-extrabold text-slate-900 w-1/3 text-center">{val}</span>
+        <span className="relative z-10 text-xs font-medium text-slate-500 w-1/3 text-right">{total > 0 ? ((val/total)*100).toFixed(1) : 0}%</span>
+    </div>
+);
 
-    // On espace les labels si on a beaucoup de données (30 jours)
-    const step = data.length > 10 ? 5 : 1;
+const Modal = ({ title, onClose, children }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+        <h3 className="text-xl font-bold text-gray-900">{title}</h3>
+        <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500 hover:text-gray-900"><X size={20} /></button>
+      </div>
+      <div className="p-8 max-h-[80vh] overflow-y-auto">
+        {children}
+      </div>
+    </div>
+  </div>
+);
 
-    return (
-        <div className="w-full h-48 relative mt-4">
-            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
-                <line x1="0" y1="25" x2="100" y2="25" stroke="#f1f5f9" strokeWidth="0.5" />
-                <line x1="0" y1="50" x2="100" y2="50" stroke="#f1f5f9" strokeWidth="0.5" />
-                <line x1="0" y1="75" x2="100" y2="75" stroke="#f1f5f9" strokeWidth="0.5" />
-                
-                <path d={`M0,100 ${points} V100 H0 Z`} fill="url(#gradient)" opacity="0.2" />
-                <polyline points={points} fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-                
-                <defs>
-                    <linearGradient id="gradient" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#2563eb" />
-                        <stop offset="100%" stopColor="#2563eb" stopOpacity="0" />
-                    </linearGradient>
-                </defs>
-            </svg>
-            
-            <div className="flex justify-between mt-2 text-xs text-slate-400 relative h-4">
-                {data.map((d, i) => {
-                    // Affichage intelligent des dates
-                    if (i === 0 || i === data.length - 1 || i % step === 0) {
-                        // Position absolue pour éviter que les textes ne se poussent
-                        const leftPos = (i / (data.length - 1)) * 100;
-                        return (
-                            <span key={i} style={{ position: 'absolute', left: `${leftPos}%`, transform: 'translateX(-50%)' }}>
-                                {new Date(d.date).toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'})}
-                            </span>
-                        );
-                    }
-                    return null;
-                })}
-            </div>
-        </div>
-    );
-};
-
-// --- DASHBOARD PRINCIPAL ---
+// --- MAIN PAGE ---
 const DashboardPage = () => {
   const [token, setToken] = useState(localStorage.getItem('empire_token'));
+  const [activeTab, setActiveTab] = useState('analytics');
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
-  const [activeTab, setActiveTab] = useState('analytics');
+  const [chartRange, setChartRange] = useState('30d');
   
-  // NOUVEAU : État pour la plage de dates ('7d' ou '30d')
-  const [chartRange, setChartRange] = useState('7d'); 
-  
-  const [loading, setLoading] = useState(true);
-  
-  const [showOrderForm, setShowOrderForm] = useState(false);
-  const [showProductForm, setShowProductForm] = useState(false);
+  // Modals state
+  const [isProductModalOpen, setProductModalOpen] = useState(false);
+  const [isOrderModalOpen, setOrderModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
 
+  // Forms
   const [productForm, setProductForm] = useState({ name: '', price: '', category: 'Divers', image_url: '', description: '' });
   const [orderForm, setOrderForm] = useState({ client: '', amount: '', email: '', items: '', addressLine1: '', city: '', postalCode: '' });
 
+  // -- Fetch Logic --
   const authFetch = async (endpoint, options = {}) => {
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...options.headers };
     const res = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
@@ -133,7 +184,6 @@ const DashboardPage = () => {
 
   const fetchData = async () => {
     if (!token) return;
-    setLoading(true);
     try {
       const [ordersRes, statsRes, prodRes] = await Promise.all([
         authFetch('/orders'), authFetch('/analytics/stats'), fetch(`${API_URL}/products`)
@@ -141,24 +191,21 @@ const DashboardPage = () => {
       if (ordersRes.ok) setOrders(await ordersRes.json());
       if (statsRes.ok) setStats(await statsRes.json());
       if (prodRes.ok) setProducts(await prodRes.json());
-    } catch (e) { console.error("Erreur chargement", e); } finally { setLoading(false); }
+    } catch (e) { console.error(e); }
   };
 
   useEffect(() => { fetchData(); }, [token]);
 
   if (!token) return <LoginScreen onLogin={(t) => { localStorage.setItem('empire_token', t); setToken(t); }} />;
 
-  // --- ACTIONS ---
-  const toggleProductForm = () => {
-    if (showProductForm) { setShowProductForm(false); setEditingProduct(null); setProductForm({ name: '', price: '', category: 'Divers', image_url: '', description: '' }); } 
-    else { setShowProductForm(true); }
-  };
-
-  const handleEditProductClick = (product) => {
-    setEditingProduct(product.id);
-    setProductForm({ name: product.name, price: product.price, category: product.category, image_url: product.image_url, description: product.description || '' });
-    setShowProductForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  // -- Handlers --
+  const openProductModal = (product = null) => {
+    setEditingProduct(product ? product.id : null);
+    setProductForm(product 
+      ? { name: product.name, price: product.price, category: product.category, image_url: product.image_url, description: product.description || '' }
+      : { name: '', price: '', category: 'Divers', image_url: '', description: '' }
+    );
+    setProductModalOpen(true);
   };
 
   const handleSaveProduct = async (e) => {
@@ -167,19 +214,19 @@ const DashboardPage = () => {
       const url = editingProduct ? `/products/${editingProduct}` : '/products';
       const method = editingProduct ? 'PUT' : 'POST';
       const res = await authFetch(url, { method, body: JSON.stringify({ ...productForm, image_url: productForm.image_url || "https://via.placeholder.com/300" }) });
-      if (res.ok) { toast.success("Enregistré !"); toggleProductForm(); fetchData(); }
+      if (res.ok) { toast.success(editingProduct ? "Produit mis à jour" : "Produit créé"); setProductModalOpen(false); fetchData(); }
     } catch (e) { toast.error("Erreur sauvegarde"); }
   };
 
   const handleDeleteProduct = async (id) => {
-    if (!confirm("Supprimer ?")) return;
-    try { await authFetch(`/products/${id}`, { method: 'DELETE' }); toast.success("Supprimé"); setProducts(prev => prev.filter(p => p.id !== id)); } catch (e) {}
+    if (!confirm("Supprimer ce produit ?")) return;
+    try { await authFetch(`/products/${id}`, { method: 'DELETE' }); toast.success("Supprimé"); fetchData(); } catch(e) {}
   };
 
   const handleAddOrder = async (e) => {
     e.preventDefault();
     try {
-        const itemsArray = orderForm.items.split(',').map(item => item.trim()).filter(i => i);
+        const itemsArray = orderForm.items.split(',').map(i => i.trim()).filter(i => i);
         const res = await fetch(`${API_URL}/orders`, { 
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -187,199 +234,343 @@ const DashboardPage = () => {
                 address: { line1: orderForm.addressLine1, city: orderForm.city, postal_code: orderForm.postalCode, country: 'France' }
             })
         });
-        if(res.ok) { toast.success("Commande créée"); setShowOrderForm(false); fetchData(); }
+        if(res.ok) { toast.success("Commande créée"); setOrderModalOpen(false); fetchData(); }
     } catch(e) { toast.error("Erreur commande"); }
   };
 
-  const handleDeleteOrder = async (id) => {
-    if (!confirm("Supprimer ?")) return;
-    toast.error("Suppression non implémentée");
+  // VALEURS PAR DÉFAUT ROBUSTES POUR ÉVITER LE CRASH
+  const summary = stats?.summary || { 
+    total_sales: 0, 
+    total_events: 0, 
+    total_orders: 0,
+    funnel: { '1_visitors': 0, '2_interested': 0, '3_converted': 0 },
+    sales_chart: { '7d': [], '30d': [] },
+    top_products: {}
   };
-
-  const handleLogout = () => { setToken(null); localStorage.removeItem('empire_token'); };
-
-  if (loading && !products.length) return <div className="h-screen flex items-center justify-center"><RefreshCw className="animate-spin text-blue-600"/></div>;
-
-  const summary = stats?.summary || { total_sales: 0, total_events: 0 };
   
-  // SÉLECTION DES DONNÉES EN FONCTION DU RANGE
-  // On récupère soit le set '7d' soit le set '30d' depuis l'API
-  const salesChartData = summary.sales_chart ? summary.sales_chart[chartRange] : [];
+  const chartData = summary.sales_chart ? summary.sales_chart[chartRange] : [];
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-extrabold text-slate-900 flex items-center gap-3">
-            <div className="bg-slate-900 text-white p-2 rounded-lg"><LayoutDashboard size={24}/></div> Empire QG
-          </h1>
-          <div className="flex gap-4">
-            <Link to="/" className="flex items-center text-slate-600 bg-white px-4 py-2 rounded-lg border border-slate-200"><ArrowLeft size={18} className="mr-2" /> Boutique</Link>
-            <button onClick={handleLogout} className="flex items-center text-red-600 bg-red-50 px-4 py-2 rounded-lg border border-red-100"><LogOut size={18} className="mr-2" /> Sortir</button>
+    <div className="flex h-screen bg-gray-50 font-sans text-gray-900 overflow-hidden">
+      
+      {/* SIDEBAR */}
+      <aside className="w-72 bg-slate-900 text-white flex flex-col hidden md:flex shadow-xl z-20">
+        <div className="p-8">
+          <div className="flex items-center gap-3 mb-10">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-900/50">
+              <span className="font-bold text-xl">E</span>
+            </div>
+            <div>
+              <h1 className="font-bold text-lg tracking-wide">EMPIRE</h1>
+              <p className="text-xs text-slate-400 font-medium tracking-wider">WORKSPACE</p>
+            </div>
           </div>
+          
+          <nav className="space-y-2">
+            <SidebarItem icon={BarChart3} label="Vue d'ensemble" active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} />
+            <SidebarItem icon={ShoppingBag} label="Commandes" active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} />
+            <SidebarItem icon={Tag} label="Produits" active={activeTab === 'products'} onClick={() => setActiveTab('products')} />
+          </nav>
         </div>
 
-        <div className="flex gap-4 mb-8 border-b border-slate-200 overflow-x-auto">
-            <TabButton active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} icon={<BarChart3 size={16}/>}>Analytics</TabButton>
-            <TabButton active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} icon={<ShoppingBag size={16}/>}>Commandes</TabButton>
-            <TabButton active={activeTab === 'products'} onClick={() => setActiveTab('products')} icon={<Tag size={16}/>}>Produits</TabButton>
+        <div className="mt-auto p-6 border-t border-slate-800">
+          <Link to="/" className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white transition-colors">
+            <ArrowLeft size={18} /> Retour Boutique
+          </Link>
+          <button onClick={() => {setToken(null); localStorage.removeItem('empire_token')}} className="w-full mt-2 flex items-center gap-3 px-4 py-3 text-red-400 hover:text-red-300 transition-colors">
+            <LogOut size={18} /> Déconnexion
+          </button>
         </div>
+      </aside>
 
-        {/* --- ANALYTICS --- */}
-        {activeTab === 'analytics' && (
-            <div className="animate-in fade-in slide-in-from-bottom-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                    <StatCard title="Vues Totales" value={summary.total_events} icon={<Users size={24} />} color="blue" />
-                    <StatCard title="Commandes" value={summary.total_orders} icon={<Package size={24} />} color="purple" />
-                    <StatCard title="Panier Moyen" value={`${summary.total_orders > 0 ? (summary.total_sales/summary.total_orders).toFixed(0) : 0} €`} icon={<ShoppingBag size={24} />} color="orange" />
-                    <StatCard title="CA Total" value={`${summary.total_sales} €`} icon={<Trophy size={24} />} color="green" />
+      {/* MAIN CONTENT */}
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+        
+        {/* TOP BAR */}
+        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 z-10">
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl font-bold text-gray-800 capitalize">{activeTab === 'analytics' ? "Tableau de bord" : activeTab}</h2>
+            {/* Search Bar simulée */}
+            <div className="hidden lg:flex items-center bg-gray-50 border border-gray-200 rounded-full px-4 py-2 ml-8 w-64 focus-within:ring-2 focus-within:ring-black/5 transition-all">
+                <Search size={16} className="text-gray-400 mr-2" />
+                <input type="text" placeholder="Rechercher..." className="bg-transparent border-none outline-none text-sm w-full placeholder-gray-400" />
+            </div>
+          </div>
+          <div className="flex items-center gap-6">
+            <button className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                <Bell size={20} />
+                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+            </button>
+            <div className="flex items-center gap-3 pl-6 border-l border-gray-100">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
+                    A
+                </div>
+                <div className="text-sm">
+                    <p className="font-bold text-gray-900 leading-none">Admin</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Super User</p>
+                </div>
+                <ChevronDown size={14} className="text-gray-400" />
+            </div>
+          </div>
+        </header>
+
+        {/* SCROLLABLE AREA */}
+        <main className="flex-1 overflow-y-auto bg-gray-50/50 p-8">
+          
+          {/* VUE ANALYTICS */}
+          {activeTab === 'analytics' && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              
+              {/* KPIs */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <KPICard title="Chiffre d'Affaires" value={formatPrice(summary.total_sales)} trend="+12%" icon={Trophy} colorClass="bg-green-500 text-green-600" />
+                <KPICard title="Commandes" value={summary.total_orders} trend="+5%" icon={Package} colorClass="bg-blue-500 text-blue-600" />
+                <KPICard title="Visiteurs" value={summary.funnel['1_visitors']} trend="-2%" icon={Users} colorClass="bg-purple-500 text-purple-600" />
+                <KPICard title="Panier Moyen" value={formatPrice(summary.total_orders ? summary.total_sales/summary.total_orders : 0)} icon={ShoppingBag} colorClass="bg-orange-500 text-orange-600" />
+              </div>
+
+              {/* GRAPHIQUE */}
+              <div className="grid lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
+                    <div className="flex justify-between items-center mb-8">
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900">Performance Financière</h3>
+                            <p className="text-sm text-gray-500 mt-1">Aperçu des revenus sur la période</p>
+                        </div>
+                        <div className="flex bg-gray-100 p-1 rounded-xl">
+                            {['7d', '30d'].map(r => (
+                                <button key={r} onClick={() => setChartRange(r)} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${chartRange === r ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                                    {r === '7d' ? '7 Jours' : '30 Jours'}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <Chart data={chartData} />
                 </div>
 
-                {/* GRAPHIQUE DES VENTES AVEC TOGGLE */}
-                <div className="grid lg:grid-cols-3 gap-8 mb-8">
-                    <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                <TrendingUp className="text-blue-600"/> Évolution Ventes
-                            </h2>
-                            {/* BOUTONS TOGGLE */}
-                            <div className="flex bg-slate-100 rounded-lg p-1">
-                                <button 
-                                    onClick={() => setChartRange('7d')}
-                                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${chartRange === '7d' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                >
-                                    7 Jours
-                                </button>
-                                <button 
-                                    onClick={() => setChartRange('30d')}
-                                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${chartRange === '30d' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                >
-                                    30 Jours
-                                </button>
-                            </div>
-                        </div>
-                        <SalesChart data={salesChartData} />
-                    </div>
-                    
+                {/* TOP PRODUCTS & TUNNEL */}
+                <div className="space-y-8">
                     {/* Tunnel */}
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                        <h2 className="text-lg font-bold text-slate-800 mb-6">Tunnel</h2>
-                        <div className="space-y-6">
+                    <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 mb-6">Tunnel de Conversion</h3>
+                        <div className="space-y-4">
                             <TunnelRow label="Vues Site" val={summary.funnel['1_visitors']} total={summary.funnel['1_visitors']} color="bg-slate-200" />
                             <TunnelRow label="Produits Vus" val={summary.funnel['2_interested']} total={summary.funnel['1_visitors']} color="bg-purple-200" />
                             <TunnelRow label="Ajouts Panier" val={summary.funnel['3_converted']} total={summary.funnel['1_visitors']} color="bg-green-200" />
                         </div>
                     </div>
-                </div>
 
-                <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-                    <h2 className="text-lg font-bold text-slate-800 mb-4">Top Produits</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {Object.entries(summary.top_products || {}).map(([name, count], i) => (
-                            <div key={i} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100">
-                                <span className="font-medium text-slate-700">{name}</span>
-                                <span className="font-bold text-blue-600">{count} vues/ajouts</span>
-                            </div>
-                        ))}
+                    {/* Top Products */}
+                    <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 mb-6">Top Produits</h3>
+                        <div className="space-y-4">
+                            {Object.entries(summary.top_products || {}).map(([name, count], i) => (
+                                <div key={i} className="flex items-center gap-4 p-3 hover:bg-gray-50 rounded-xl transition-colors group cursor-default">
+                                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 font-bold group-hover:bg-white group-hover:shadow-md transition-all">#{i+1}</div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-semibold text-gray-900 truncate">{name}</p>
+                                        <p className="text-xs text-gray-500">{count} interactions</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-sm font-bold text-black">{count}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
+              </div>
             </div>
-        )}
+          )}
 
-        {/* --- PRODUITS --- */}
-        {activeTab === 'products' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold">Catalogue</h2>
-              <button onClick={toggleProductForm} className={`px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm text-white ${showProductForm ? 'bg-slate-500' : 'bg-blue-600'}`}>
-                {showProductForm ? <><X size={18}/> Fermer</> : <><Plus size={18}/> Nouveau</>}
-              </button>
+          {/* VUE PRODUITS */}
+          {activeTab === 'products' && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+                <div className="flex justify-between items-center">
+                    <div className="flex gap-4">
+                        <button className="px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center gap-2"><Filter size={16}/> Filtres</button>
+                    </div>
+                    <button onClick={() => openProductModal()} className="px-6 py-3 bg-black text-white rounded-xl font-bold text-sm hover:bg-gray-900 shadow-lg shadow-gray-200 flex items-center gap-2 transition-all hover:scale-105 active:scale-95">
+                        <Plus size={18} /> Nouveau Produit
+                    </button>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                    <table className="w-full text-left">
+                        <thead className="bg-gray-50/50 border-b border-gray-100">
+                            <tr>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Produit</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Catégorie</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Prix</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {products.map(p => (
+                                <tr key={p.id} className="hover:bg-gray-50/50 transition-colors group">
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden border border-gray-200">
+                                                <img src={p.image_url} className="w-full h-full object-cover" alt="" onError={(e) => e.target.src = 'https://via.placeholder.com/50'} />
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-gray-900">{p.name}</p>
+                                                <p className="text-xs text-gray-500 truncate max-w-[200px]">{p.description || "Aucune description"}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600">{p.category}</span>
+                                    </td>
+                                    <td className="px-6 py-4 font-mono font-medium text-gray-900">{formatPrice(p.price)}</td>
+                                    <td className="px-6 py-4 text-right">
+                                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => openProductModal(p)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Pencil size={16}/></button>
+                                            <button onClick={() => handleDeleteProduct(p.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            
-            {showProductForm && (
-               <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 mb-8 border-l-4 border-l-blue-600">
-                 <h3 className="font-bold text-lg mb-4">{editingProduct ? 'Modifier' : 'Ajouter'}</h3>
-                 <form onSubmit={handleSaveProduct} className="grid md:grid-cols-2 gap-5">
-                    <div className="space-y-4">
-                        <input className="border p-2.5 rounded-lg w-full" placeholder="Nom" value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} required />
-                        <div className="flex gap-2">
-                            <input className="border p-2.5 rounded-lg w-full" placeholder="Prix" type="number" step="0.01" value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} required />
-                            <select className="border p-2.5 rounded-lg bg-white" value={productForm.category} onChange={e => setProductForm({...productForm, category: e.target.value})}>
-                                <option>Divers</option><option>Smartphone</option><option>Ordinateur</option><option>Audio</option><option>Mode</option>
+          )}
+
+          {/* VUE COMMANDES */}
+          {activeTab === 'orders' && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+                <div className="flex justify-between items-center">
+                    <div className="flex gap-4">
+                        <button className="px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center gap-2"><Filter size={16}/> Tout</button>
+                    </div>
+                    <button onClick={() => setOrderModalOpen(true)} className="px-6 py-3 bg-white text-gray-900 border border-gray-200 rounded-xl font-bold text-sm hover:bg-gray-50 shadow-sm flex items-center gap-2">
+                        <Plus size={18} /> Commande Manuelle
+                    </button>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                    <table className="w-full text-left">
+                        <thead className="bg-gray-50/50 border-b border-gray-100">
+                            <tr>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Commande</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Client</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Total</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Statut</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {orders.map(order => (
+                                <tr key={order.id} className="hover:bg-gray-50/50 transition-colors cursor-pointer">
+                                    <td className="px-6 py-4 font-mono text-sm text-gray-500">#{order.id}</td>
+                                    <td className="px-6 py-4">
+                                        <p className="font-bold text-gray-900">{order.customer || "Inconnu"}</p>
+                                        <p className="text-xs text-gray-500">{order.email}</p>
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-600">{formatDate(order.date)}</td>
+                                    <td className="px-6 py-4 font-bold text-gray-900">{formatPrice(order.amount)}</td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${order.status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
+                                            {order.status === 'paid' ? 'Payée' : order.status}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+          )}
+
+        </main>
+      </div>
+
+      {/* MODALS */}
+      {isProductModalOpen && (
+        <Modal title={editingProduct ? "Modifier le produit" : "Nouveau Produit"} onClose={() => setProductModalOpen(false)}>
+            <form onSubmit={handleSaveProduct} className="grid md:grid-cols-2 gap-6">
+                <div className="col-span-2 md:col-span-1 space-y-4">
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Nom du produit</label>
+                        <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none transition" value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} required />
+                    </div>
+                    <div className="flex gap-4">
+                        <div className="flex-1">
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Prix</label>
+                            <input type="number" step="0.01" className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none transition" value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} required />
+                        </div>
+                        <div className="flex-1">
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Catégorie</label>
+                            <select className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none transition" value={productForm.category} onChange={e => setProductForm({...productForm, category: e.target.value})}>
+                                <option>Divers</option><option>Vêtements</option><option>Accessoires</option><option>Électronique</option>
                             </select>
                         </div>
-                        <textarea className="border p-2.5 rounded-lg w-full h-24" placeholder="Description..." value={productForm.description} onChange={e => setProductForm({...productForm, description: e.target.value})} />
                     </div>
-                    <div className="space-y-4">
-                        <input className="border p-2.5 rounded-lg w-full" placeholder="Image URL" value={productForm.image_url} onChange={e => setProductForm({...productForm, image_url: e.target.value})} />
-                        <button className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg">Enregistrer</button>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Description</label>
+                        <textarea className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none transition h-32 resize-none" value={productForm.description} onChange={e => setProductForm({...productForm, description: e.target.value})} />
                     </div>
-                 </form>
-               </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {products.map(product => (
-                    <div key={product.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-all group relative">
-                        <div className="aspect-square bg-slate-100 relative">
-                            <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" onError={(e) => e.target.src='https://via.placeholder.com/300'} />
-                            <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => handleEditProductClick(product)} className="bg-white p-2 rounded-full text-blue-600 shadow"><Pencil size={16}/></button>
-                                <button onClick={() => handleDeleteProduct(product.id)} className="bg-white p-2 rounded-full text-red-500 shadow"><Trash2 size={16}/></button>
-                            </div>
-                        </div>
-                        <div className="p-4">
-                            <h3 className="font-bold text-slate-900">{product.name}</h3>
-                            <span className="text-blue-600 font-bold">{product.price} €</span>
-                        </div>
-                    </div>
-                ))}
-            </div>
-          </div>
-        )}
-
-        {/* --- COMMANDES --- */}
-        {activeTab === 'orders' && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-bold">Commandes</h2>
-                    <button onClick={() => setShowOrderForm(!showOrderForm)} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm"><Plus size={18}/> Créer</button>
                 </div>
-                {/* Formulaire commande identique... */}
-                {orders.map(order => (
-                    <div key={order.id} className="bg-white border border-slate-200 rounded-xl p-6 flex justify-between items-center shadow-sm">
-                        <div>
-                            <h3 className="font-bold">Commande #{order.id}</h3>
-                            <p className="text-sm text-slate-500">{order.email} • {new Date(order.date).toLocaleDateString()}</p>
-                        </div>
-                        <div className="text-right">
-                            <p className="font-bold text-lg">{order.amount} €</p>
-                            <p className="text-xs text-green-600 uppercase font-bold bg-green-50 px-2 py-1 rounded inline-block mt-1">{order.status}</p>
-                        </div>
+                <div className="col-span-2 md:col-span-1 space-y-4">
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Image URL</label>
+                        <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none transition" value={productForm.image_url} onChange={e => setProductForm({...productForm, image_url: e.target.value})} placeholder="https://..." />
                     </div>
-                ))}
-            </div>
-        )}
-      </div>
+                    <div className="h-48 bg-gray-100 rounded-2xl border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden relative group">
+                        {productForm.image_url ? (
+                            <img src={productForm.image_url} alt="Preview" className="w-full h-full object-cover" onError={(e) => e.target.src='https://via.placeholder.com/300?text=No+Image'} />
+                        ) : (
+                            <div className="text-center text-gray-400">
+                                <ImageIcon className="mx-auto mb-2 opacity-50" />
+                                <span className="text-xs">Aperçu</span>
+                            </div>
+                        )}
+                    </div>
+                    <button type="submit" className="w-full bg-black text-white font-bold py-3.5 rounded-xl hover:bg-gray-800 transition-all mt-auto shadow-lg shadow-gray-200">
+                        {editingProduct ? "Mettre à jour" : "Créer le produit"}
+                    </button>
+                </div>
+            </form>
+        </Modal>
+      )}
+
+      {isOrderModalOpen && (
+        <Modal title="Nouvelle Commande" onClose={() => setOrderModalOpen(false)}>
+            <form onSubmit={handleAddOrder} className="grid grid-cols-2 gap-6">
+                <div className="col-span-2">
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Client</label>
+                    <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none" placeholder="Nom complet" value={orderForm.client} onChange={e => setOrderForm({...orderForm, client: e.target.value})} />
+                </div>
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Email</label>
+                    <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none" value={orderForm.email} onChange={e => setOrderForm({...orderForm, email: e.target.value})} />
+                </div>
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Montant</label>
+                    <input type="number" className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none" value={orderForm.amount} onChange={e => setOrderForm({...orderForm, amount: e.target.value})} />
+                </div>
+                <div className="col-span-2">
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Produits (séparés par virgule)</label>
+                    <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none" value={orderForm.items} onChange={e => setOrderForm({...orderForm, items: e.target.value})} />
+                </div>
+                <div className="col-span-2 border-t border-gray-100 pt-4 mt-2">
+                    <h4 className="font-bold text-sm text-gray-900 mb-4">Adresse de livraison</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                        <input className="col-span-2 w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none" placeholder="Adresse" value={orderForm.addressLine1} onChange={e => setOrderForm({...orderForm, addressLine1: e.target.value})} />
+                        <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none" placeholder="Code Postal" value={orderForm.postalCode} onChange={e => setOrderForm({...orderForm, postalCode: e.target.value})} />
+                        <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none" placeholder="Ville" value={orderForm.city} onChange={e => setOrderForm({...orderForm, city: e.target.value})} />
+                    </div>
+                </div>
+                <button type="submit" className="col-span-2 bg-black text-white font-bold py-3.5 rounded-xl hover:bg-gray-800 transition-all shadow-lg mt-4">
+                    Enregistrer la commande
+                </button>
+            </form>
+        </Modal>
+      )}
+
     </div>
   );
 };
-
-// UI Components
-const TabButton = ({ active, onClick, icon, children }) => (
-    <button onClick={onClick} className={`flex items-center gap-2 pb-3 px-4 font-semibold text-sm transition-all border-b-2 ${active ? 'text-blue-600 border-blue-600' : 'text-slate-500 border-transparent hover:text-slate-700'}`}>{icon} {children}</button>
-);
-const StatCard = ({ title, value, icon, color }) => {
-    const colors = { blue: 'bg-blue-50 text-blue-600', green: 'bg-green-50 text-green-600', purple: 'bg-purple-50 text-purple-600', orange: 'bg-orange-50 text-orange-600' };
-    return (<div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100"><div className="flex justify-between items-start"><div><p className="text-sm font-medium text-slate-500">{title}</p><h3 className="text-3xl font-bold text-slate-900 mt-2">{value}</h3></div><div className={`p-3 rounded-lg ${colors[color]}`}>{icon}</div></div></div>);
-};
-const TunnelRow = ({ label, val, total, color }) => (
-    <div className="relative h-10 w-full bg-slate-50 rounded-lg overflow-hidden flex items-center px-4">
-        <div className={`absolute left-0 top-0 h-full ${color}`} style={{ width: `${total > 0 ? (val/total)*100 : 0}%`, opacity: 0.5 }}></div>
-        <span className="relative z-10 font-medium text-slate-700 w-1/3">{label}</span>
-        <span className="relative z-10 font-bold text-slate-900 w-1/3 text-center">{val}</span>
-        <span className="relative z-10 text-xs text-slate-500 w-1/3 text-right">{total > 0 ? ((val/total)*100).toFixed(1) : 0}%</span>
-    </div>
-);
 
 export default DashboardPage;

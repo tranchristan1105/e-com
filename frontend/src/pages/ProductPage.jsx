@@ -1,177 +1,237 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, ShoppingCart, ShieldCheck, Truck, Star } from 'lucide-react';
-import { useCart } from '../context/CartContext';
-import { useTracking } from '../hooks/useTracking';
-import { Helmet } from 'react-helmet-async'; // <--- IMPORT SEO
+import { useParams, Link } from 'react-router-dom';
+import { 
+  Star, ShoppingBag, Truck, ShieldCheck, ChevronDown, 
+  ArrowLeft, Share2, Heart, Check
+} from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
+// Configuration API
 let apiUrl = "http://localhost:8000/api/v1";
 try {
-  if (import.meta && import.meta.env && import.meta.env.VITE_API_URL) {
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
     apiUrl = import.meta.env.VITE_API_URL;
   }
 } catch (e) {}
 const API_URL = apiUrl;
 
+// --- COMPOSANTS UI ---
+
+const Accordion = ({ title, children, defaultOpen = false }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  return (
+    <div className="border-b border-gray-100">
+      <button 
+        onClick={() => setIsOpen(!isOpen)} 
+        className="w-full py-4 flex justify-between items-center text-left hover:text-blue-600 transition-colors"
+      >
+        <span className="font-bold text-sm uppercase tracking-wide">{title}</span>
+        <ChevronDown size={16} className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? 'max-h-96 opacity-100 mb-4' : 'max-h-0 opacity-0'}`}>
+        <div className="text-sm text-gray-500 leading-relaxed">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ProductPage = () => {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const { addToCart } = useCart();
-  const { trackEvent } = useTracking();
   const [product, setProduct] = useState(null);
   const [relatedProducts, setRelatedProducts] = useState([]);
-
-  const fallbackProduct = {
-    id: id,
-    name: "Produit Demo",
-    price: 99.99,
-    category: "Mode Démo",
-    description: "Ceci est une description de test.",
-    image_url: "https://via.placeholder.com/500"
-  };
+  const [loading, setLoading] = useState(true);
+  const [quantity, setQuantity] = useState(1);
+  const [activeImage, setActiveImage] = useState(0);
 
   useEffect(() => {
-    const controller = new AbortController();
-
-    fetch(`${API_URL}/products/${id}`, { signal: controller.signal })
-      .then(res => {
-        if (!res.ok) throw new Error("Erreur");
-        return res.json();
-      })
-      .then(data => {
+    const fetchData = async () => {
+      setLoading(true);
+      window.scrollTo(0, 0);
+      try {
+        const res = await fetch(`${API_URL}/products/${id}`);
+        if (!res.ok) throw new Error("Produit introuvable");
+        const data = await res.json();
         setProduct(data);
-        trackEvent('view_item', { 
-            product_id: data.id, 
-            name: data.name,
-            category: data.category
-        });
-        return fetch(`${API_URL}/products?category=${data.category}`);
-      })
-      .then(res => res ? res.json() : [])
-      .then(allProducts => {
-        if (Array.isArray(allProducts)) {
-            const related = allProducts
-                .filter(p => p.id !== parseInt(id))
-                .slice(0, 3);
-            setRelatedProducts(related);
+
+        // Fetch related (simulation: on prend tout et on filtre)
+        const resAll = await fetch(`${API_URL}/products`);
+        if (resAll.ok) {
+          const all = await resAll.json();
+          setRelatedProducts(all.filter(p => p.id !== parseInt(id)).slice(0, 3));
         }
-      })
-      .catch((err) => {
-        if (err.name === 'AbortError') return;
-        setProduct(fallbackProduct);
-      });
-
-    return () => controller.abort();
-  }, [id, trackEvent]);
-
-  useEffect(() => {
-    window.scrollTo(0, 0);
+      } catch (e) {
+        console.error(e);
+        toast.error("Impossible de charger le produit");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, [id]);
 
-  if (!product) return <div className="min-h-screen flex items-center justify-center">Chargement...</div>;
+  const handleAddToCart = () => {
+    // Ici vous connecterez votre CartContext
+    toast.success(`${quantity}x ${product.name} ajouté au panier`, {
+        icon: '🛍️',
+        style: {
+            borderRadius: '10px',
+            background: '#333',
+            color: '#fff',
+        },
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="animate-pulse flex flex-col items-center">
+            <div className="w-12 h-12 bg-gray-200 rounded-full mb-4"></div>
+            <div className="h-4 w-32 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!product) return <div className="text-center py-20">Produit introuvable.</div>;
 
   return (
-    <div className="bg-white min-h-screen pb-20">
+    <div className="bg-white min-h-screen font-sans text-gray-900 pb-20">
       
-      {/* SEO DYNAMIQUE : Le titre change selon le produit ! */}
-      <Helmet>
-        <title>{product.name} | E-Shop Empire</title>
-        <meta name="description" content={`Achetez ${product.name} au meilleur prix. ${product.description}`} />
-        <meta property="og:title" content={product.name} />
-        <meta property="og:image" content={product.image_url} />
-        <meta property="og:price:amount" content={product.price} />
-        <meta property="og:price:currency" content="EUR" />
-      </Helmet>
+      {/* HEADER SIMPLE */}
+      <div className="container mx-auto px-6 py-6 flex justify-between items-center">
+        <Link to="/" className="text-sm font-medium text-gray-500 hover:text-black flex items-center gap-2 transition-colors">
+            <ArrowLeft size={16} /> Retour
+        </Link>
+        <div className="flex gap-4">
+            <button className="p-2 hover:bg-gray-50 rounded-full transition-colors"><Share2 size={18} /></button>
+            <button className="p-2 hover:bg-gray-50 rounded-full transition-colors"><Heart size={18} /></button>
+        </div>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-10">
-        <button onClick={() => navigate(-1)} className="group flex items-center text-gray-500 hover:text-blue-600 mb-8 transition-colors">
-          <div className="bg-gray-100 p-2 rounded-full mr-3 group-hover:bg-blue-50 transition-colors">
-            <ArrowLeft className="w-5 h-5" />
-          </div>
-          <span className="font-medium">Retour au catalogue</span>
-        </button>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start mb-24">
-          <div className="bg-gray-50 rounded-3xl p-8 border border-gray-100 flex items-center justify-center aspect-square shadow-inner relative group overflow-hidden">
-             <img src={product.image_url} alt={product.name} className="object-contain w-full h-full drop-shadow-xl group-hover:scale-105 transition-transform duration-500 z-10" />
-             <div className="absolute inset-0 bg-gradient-to-tr from-white/0 to-white/80 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-          </div>
-
-          <div className="flex flex-col h-full pt-4">
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <span className="inline-block px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold uppercase tracking-wide">{product.category}</span>
-                <div className="flex items-center gap-1 text-yellow-400">
-                    <Star size={16} fill="currentColor" />
-                    <Star size={16} fill="currentColor" />
-                    <Star size={16} fill="currentColor" />
-                    <Star size={16} fill="currentColor" />
-                    <Star size={16} fill="currentColor" className="text-gray-300" />
-                    <span className="text-xs text-gray-400 font-medium ml-1 text-black">(24 avis)</span>
-                </div>
-              </div>
-              <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-6 leading-tight">{product.name}</h1>
-              <p className="text-gray-500 text-lg leading-relaxed">{product.description}</p>
-            </div>
+      <div className="container mx-auto px-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20">
             
-            <div className="mt-auto border-t border-gray-100 pt-8">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-8">
-                 <div>
-                   <p className="text-sm text-gray-400 mb-1">Prix total</p>
-                   <span className="text-4xl font-bold text-slate-900">{product.price} €</span>
-                 </div>
-                 <button
-                   onClick={() => { 
-                       addToCart(product); 
-                       trackEvent('add_to_cart', { 
-                           id: product.id, 
-                           name: product.name, 
-                           price: product.price,
-                           category: product.category
-                        });
-                       trackMarketingEvent('AddToCart', {
-                            content_ids: [product.id],
-                            content_name: product.name,
-                            value: product.price,
-                            currency: 'EUR'
-                        }); 
-                   }}
-                   className="flex-1 bg-slate-900 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-slate-800 shadow-xl shadow-slate-200 transition-all active:scale-95 flex items-center justify-center gap-3"
-                 >
-                   <ShoppingCart size={24} /> Ajouter au panier
-                 </button>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="flex items-center text-gray-600 text-sm bg-gray-50 p-3 rounded-lg border border-gray-100"><Check className="text-green-500 mr-2" size={20} /> En stock</div>
-                 <div className="flex items-center text-gray-600 text-sm bg-gray-50 p-3 rounded-lg border border-gray-100"><Truck className="text-blue-500 mr-2" size={20} /> Livraison 24h</div>
-                 <div className="flex items-center text-gray-600 text-sm bg-gray-50 p-3 rounded-lg border border-gray-100"><ShieldCheck className="text-purple-500 mr-2" size={20} /> Garantie 2 ans</div>
-              </div>
+            {/* GAUCHE : VISUELS (Sticky sur Desktop) */}
+            <div className="relative">
+                <div className="lg:sticky lg:top-10 space-y-4">
+                    {/* Image Principale */}
+                    <div className="aspect-square bg-gray-50 rounded-3xl overflow-hidden relative group">
+                        <img 
+                            src={product.image_url} 
+                            alt={product.name} 
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                            onError={(e) => e.target.src='https://via.placeholder.com/800'}
+                        />
+                        <div className="absolute top-4 left-4">
+                            <span className="bg-white/90 backdrop-blur text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                                {product.category}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    {/* Galerie (Simulée pour l'effet visuel) */}
+                    <div className="grid grid-cols-4 gap-4">
+                        {[0, 1, 2, 3].map((i) => (
+                            <button 
+                                key={i}
+                                onClick={() => setActiveImage(i)}
+                                className={`aspect-square rounded-xl overflow-hidden border-2 transition-all ${activeImage === i ? 'border-black' : 'border-transparent hover:border-gray-200'}`}
+                            >
+                                <img src={product.image_url} className="w-full h-full object-cover opacity-80 hover:opacity-100" alt="" />
+                            </button>
+                        ))}
+                    </div>
+                </div>
             </div>
-          </div>
+
+            {/* DROITE : INFOS & ACHAT */}
+            <div className="lg:py-10">
+                <div className="mb-8">
+                    <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4 tracking-tight leading-tight">
+                        {product.name}
+                    </h1>
+                    <div className="flex items-center gap-4 mb-6">
+                        <div className="flex items-center text-yellow-400 gap-1">
+                            <Star size={18} fill="currentColor" />
+                            <Star size={18} fill="currentColor" />
+                            <Star size={18} fill="currentColor" />
+                            <Star size={18} fill="currentColor" />
+                            <Star size={18} fill="currentColor" className="opacity-50" />
+                        </div>
+                        <span className="text-sm text-gray-500 font-medium underline cursor-pointer">4.8/5 (124 avis)</span>
+                    </div>
+                    <div className="text-3xl font-bold text-blue-600 mb-6">
+                        {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(product.price)}
+                    </div>
+                    <p className="text-gray-600 leading-relaxed text-lg">
+                        {product.description || "Un design exceptionnel pour une expérience unique. Fabriqué avec des matériaux premium pour durer dans le temps."}
+                    </p>
+                </div>
+
+                {/* Sélecteurs (Couleur/Taille - Simulés) */}
+                <div className="space-y-6 mb-8 border-t border-b border-gray-100 py-8">
+                    {/* Actions d'achat */}
+                    <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="flex items-center border border-gray-300 rounded-full px-4 h-14 w-full sm:w-32">
+                            <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="text-gray-500 hover:text-black font-bold text-xl px-2">-</button>
+                            <span className="flex-1 text-center font-bold">{quantity}</span>
+                            <button onClick={() => setQuantity(quantity + 1)} className="text-gray-500 hover:text-black font-bold text-xl px-2">+</button>
+                        </div>
+                        <button 
+                            onClick={handleAddToCart}
+                            className="flex-1 bg-black text-white h-14 rounded-full font-bold text-lg hover:bg-gray-900 transition-all transform hover:scale-[1.02] shadow-xl shadow-gray-200 flex items-center justify-center gap-2"
+                        >
+                            <ShoppingBag size={20} /> Ajouter au panier
+                        </button>
+                    </div>
+                    
+                    {/* Réassurance Rapide */}
+                    <div className="flex items-center justify-center gap-6 text-xs font-medium text-gray-500">
+                        <span className="flex items-center gap-1"><Truck size={14}/> Livraison Gratuite</span>
+                        <span className="flex items-center gap-1"><ShieldCheck size={14}/> Garantie 2 ans</span>
+                        <span className="flex items-center gap-1"><Check size={14}/> En Stock</span>
+                    </div>
+                </div>
+
+                {/* Accordéons */}
+                <div className="space-y-2">
+                    <Accordion title="Caractéristiques" defaultOpen={true}>
+                        <ul className="list-disc pl-5 space-y-1 marker:text-gray-300">
+                            <li>Matériaux premium certifiés</li>
+                            <li>Design ergonomique et léger</li>
+                            <li>Résistance à l'eau et à la poussière</li>
+                            <li>Garantie constructeur incluse</li>
+                        </ul>
+                    </Accordion>
+                    <Accordion title="Livraison & Retours">
+                        <p>Livraison standard offerte (2-4 jours ouvrables). Livraison express disponible.</p>
+                        <p className="mt-2">Retours gratuits sous 30 jours si le produit ne vous convient pas. Remboursement intégral sans question.</p>
+                    </Accordion>
+                    <Accordion title="Entretien">
+                        <p>Nettoyer avec un chiffon doux et sec. Éviter l'exposition prolongée au soleil direct.</p>
+                    </Accordion>
+                </div>
+            </div>
         </div>
 
+        {/* SECTION : VOUS AIMEREZ AUSSI */}
         {relatedProducts.length > 0 && (
-            <div className="border-t border-gray-100 pt-16">
-                <h2 className="text-2xl font-bold text-slate-900 mb-8">Vous aimerez aussi</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
-                    {relatedProducts.map((related) => (
-                        <div 
-                            key={related.id}
-                            onClick={() => navigate(`/product/${related.id}`)}
-                            className="group cursor-pointer bg-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-lg transition-all overflow-hidden"
-                        >
-                            <div className="h-48 bg-gray-50 p-6 flex items-center justify-center">
-                                <img src={related.image_url} alt={related.name} className="h-full object-contain group-hover:scale-110 transition-transform duration-300 mix-blend-multiply" />
-                            </div>
-                            <div className="p-4">
-                                <p className="text-xs font-bold text-blue-600 uppercase mb-1">{related.category}</p>
-                                <h3 className="font-bold text-slate-900 mb-2 truncate">{related.name}</h3>
-                                <div className="flex justify-between items-center">
-                                    <span className="font-bold text-slate-900">{related.price} €</span>
-                                    <span className="text-sm text-blue-600 font-medium group-hover:underline">Voir</span>
+            <div className="mt-24 border-t border-gray-100 pt-16">
+                <h2 className="text-2xl font-bold mb-10 text-center">Vous aimerez aussi</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    {relatedProducts.map((rel) => (
+                        <Link to={`/product/${rel.id}`} key={rel.id} className="group cursor-pointer">
+                            <div className="aspect-[4/5] bg-gray-100 rounded-2xl overflow-hidden mb-4 relative">
+                                <img src={rel.image_url} alt={rel.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" onError={(e) => e.target.src='https://via.placeholder.com/400'}/>
+                                <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity translate-y-2 group-hover:translate-y-0 duration-300">
+                                    Voir le produit
                                 </div>
                             </div>
-                        </div>
+                            <h3 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{rel.name}</h3>
+                            <p className="text-gray-500">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(rel.price)}</p>
+                        </Link>
                     ))}
                 </div>
             </div>
