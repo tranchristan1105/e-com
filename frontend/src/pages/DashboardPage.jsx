@@ -7,7 +7,7 @@ import {
 import { Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 
-// --- CONFIGURATION ---
+// --- CONFIGURATION API ---
 let apiUrl = "http://localhost:8000/api/v1";
 try {
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
@@ -20,7 +20,7 @@ const API_URL = apiUrl;
 const formatPrice = (price) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(price || 0);
 const formatDate = (dateString) => new Date(dateString).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-// --- LOGIN SCREEN (Redesign Épuré) ---
+// --- LOGIN SCREEN ---
 const LoginScreen = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -70,7 +70,7 @@ const LoginScreen = ({ onLogin }) => {
   );
 };
 
-// --- COMPOSANTS DU DASHBOARD ---
+// --- COMPOSANTS DASHBOARD ---
 
 const SidebarItem = ({ icon: Icon, label, active, onClick }) => (
   <button 
@@ -106,31 +106,50 @@ const KPICard = ({ title, value, trend, icon: Icon, colorClass }) => (
   </div>
 );
 
-const Chart = ({ data }) => {
-  if (!data || data.length === 0) return <div className="h-64 flex items-center justify-center text-gray-300 font-medium bg-gray-50 rounded-2xl border border-dashed border-gray-200">Données insuffisantes</div>;
-  const maxVal = Math.max(...data.map(d => d.amount), 100);
-  const points = data.map((d, i) => `${(i / (data.length - 1)) * 100},${100 - (d.amount / maxVal) * 100}`).join(' ');
+const SalesChart = ({ data }) => {
+    if (!data || data.length === 0) return <div className="h-64 flex items-center justify-center text-gray-300 font-medium bg-gray-50 rounded-2xl border border-dashed border-gray-200">Données insuffisantes</div>;
+    
+    const maxVal = Math.max(...data.map(d => d.amount), 100);
+    const points = data.map((d, i) => {
+        const x = (i / (data.length - 1)) * 100;
+        const y = 100 - (d.amount / maxVal) * 100;
+        return `${x},${y}`;
+    }).join(' ');
 
-  return (
-    <div className="w-full h-72 relative group cursor-crosshair">
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
-        <defs>
-          <linearGradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.2"/>
-            <stop offset="100%" stopColor="#3B82F6" stopOpacity="0"/>
-          </linearGradient>
-        </defs>
-        <path d={`M0,100 ${points} V100 H0 Z`} fill="url(#chartGradient)" />
-        <polyline points={points} fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" vectorEffect="non-scaling-stroke" className="drop-shadow-lg" />
-      </svg>
-      {/* Tooltip Overlay (Mock) */}
-      <div className="absolute inset-0 flex items-end justify-between px-2 pb-2 opacity-0 group-hover:opacity-100 transition-opacity">
-         {data.filter((_, i) => i % Math.ceil(data.length/6) === 0).map((d, i) => (
-             <div key={i} className="text-xs text-gray-400 font-medium">{new Date(d.date).toLocaleDateString('fr', {day:'numeric', month:'short'})}</div>
-         ))}
-      </div>
-    </div>
-  );
+    const step = data.length > 10 ? 5 : 1;
+
+    return (
+        <div className="w-full h-72 relative mt-4">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
+                <line x1="0" y1="25" x2="100" y2="25" stroke="#f1f5f9" strokeWidth="0.5" />
+                <line x1="0" y1="50" x2="100" y2="50" stroke="#f1f5f9" strokeWidth="0.5" />
+                <line x1="0" y1="75" x2="100" y2="75" stroke="#f1f5f9" strokeWidth="0.5" />
+                
+                <defs>
+                  <linearGradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.2"/>
+                    <stop offset="100%" stopColor="#3B82F6" stopOpacity="0"/>
+                  </linearGradient>
+                </defs>
+                <path d={`M0,100 ${points} V100 H0 Z`} fill="url(#chartGradient)" />
+                <polyline points={points} fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" vectorEffect="non-scaling-stroke" className="drop-shadow-lg" />
+            </svg>
+            
+            <div className="flex justify-between mt-2 text-xs text-slate-400 relative h-4">
+                {data.map((d, i) => {
+                    if (i === 0 || i === data.length - 1 || i % step === 0) {
+                        const leftPos = (i / (data.length - 1)) * 100;
+                        return (
+                            <span key={i} style={{ position: 'absolute', left: `${leftPos}%`, transform: 'translateX(-50%)' }}>
+                                {new Date(d.date).toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'})}
+                            </span>
+                        );
+                    }
+                    return null;
+                })}
+            </div>
+        </div>
+    );
 };
 
 const TunnelRow = ({ label, val, total, color }) => (
@@ -174,6 +193,8 @@ const DashboardPage = () => {
   const [productForm, setProductForm] = useState({ name: '', price: '', category: 'Divers', image_url: '', description: '' });
   const [orderForm, setOrderForm] = useState({ client: '', amount: '', email: '', items: '', addressLine1: '', city: '', postalCode: '' });
 
+  const [loading, setLoading] = useState(true);
+
   // -- Fetch Logic --
   const authFetch = async (endpoint, options = {}) => {
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...options.headers };
@@ -184,14 +205,30 @@ const DashboardPage = () => {
 
   const fetchData = async () => {
     if (!token) return;
+    setLoading(true);
+    
+    // 1. Charger les produits (PUBLIC) - Essentiel pour la gestion de stock
     try {
-      const [ordersRes, statsRes, prodRes] = await Promise.all([
-        authFetch('/orders'), authFetch('/analytics/stats'), fetch(`${API_URL}/products`)
-      ]);
-      if (ordersRes.ok) setOrders(await ordersRes.json());
-      if (statsRes.ok) setStats(await statsRes.json());
-      if (prodRes.ok) setProducts(await prodRes.json());
-    } catch (e) { console.error(e); }
+        const prodRes = await fetch(`${API_URL}/products`);
+        if (prodRes.ok) {
+            const data = await prodRes.json();
+            setProducts(data);
+        }
+    } catch (e) { console.error("Crash fetch produits", e); }
+
+    // 2. Charger les commandes (PRIVÉ)
+    try {
+        const ordersRes = await authFetch('/orders');
+        if (ordersRes.ok) setOrders(await ordersRes.json());
+    } catch (e) { console.warn("Erreur chargement commandes", e); }
+
+    // 3. Charger les stats (PRIVÉ)
+    try {
+        const statsRes = await authFetch('/analytics/stats');
+        if (statsRes.ok) setStats(await statsRes.json());
+    } catch (e) { console.warn("Erreur chargement stats", e); }
+
+    setLoading(false);
   };
 
   useEffect(() => { fetchData(); }, [token]);
@@ -238,16 +275,13 @@ const DashboardPage = () => {
     } catch(e) { toast.error("Erreur commande"); }
   };
 
-  // VALEURS PAR DÉFAUT ROBUSTES POUR ÉVITER LE CRASH
+  // Valeurs par défaut robustes
   const summary = stats?.summary || { 
-    total_sales: 0, 
-    total_events: 0, 
-    total_orders: 0,
+    total_sales: 0, total_events: 0, total_orders: 0,
     funnel: { '1_visitors': 0, '2_interested': 0, '3_converted': 0 },
     sales_chart: { '7d': [], '30d': [] },
     top_products: {}
   };
-  
   const chartData = summary.sales_chart ? summary.sales_chart[chartRange] : [];
 
   return (
@@ -290,7 +324,6 @@ const DashboardPage = () => {
         <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 z-10">
           <div className="flex items-center gap-4">
             <h2 className="text-xl font-bold text-gray-800 capitalize">{activeTab === 'analytics' ? "Tableau de bord" : activeTab}</h2>
-            {/* Search Bar simulée */}
             <div className="hidden lg:flex items-center bg-gray-50 border border-gray-200 rounded-full px-4 py-2 ml-8 w-64 focus-within:ring-2 focus-within:ring-black/5 transition-all">
                 <Search size={16} className="text-gray-400 mr-2" />
                 <input type="text" placeholder="Rechercher..." className="bg-transparent border-none outline-none text-sm w-full placeholder-gray-400" />
@@ -321,7 +354,6 @@ const DashboardPage = () => {
           {activeTab === 'analytics' && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
               
-              {/* KPIs */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <KPICard title="Chiffre d'Affaires" value={formatPrice(summary.total_sales)} trend="+12%" icon={Trophy} colorClass="bg-green-500 text-green-600" />
                 <KPICard title="Commandes" value={summary.total_orders} trend="+5%" icon={Package} colorClass="bg-blue-500 text-blue-600" />
@@ -329,7 +361,6 @@ const DashboardPage = () => {
                 <KPICard title="Panier Moyen" value={formatPrice(summary.total_orders ? summary.total_sales/summary.total_orders : 0)} icon={ShoppingBag} colorClass="bg-orange-500 text-orange-600" />
               </div>
 
-              {/* GRAPHIQUE */}
               <div className="grid lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
                     <div className="flex justify-between items-center mb-8">
@@ -345,12 +376,10 @@ const DashboardPage = () => {
                             ))}
                         </div>
                     </div>
-                    <Chart data={chartData} />
+                    <SalesChart data={chartData} />
                 </div>
 
-                {/* TOP PRODUCTS & TUNNEL */}
                 <div className="space-y-8">
-                    {/* Tunnel */}
                     <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
                         <h3 className="text-lg font-bold text-gray-900 mb-6">Tunnel de Conversion</h3>
                         <div className="space-y-4">
@@ -360,7 +389,6 @@ const DashboardPage = () => {
                         </div>
                     </div>
 
-                    {/* Top Products */}
                     <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
                         <h3 className="text-lg font-bold text-gray-900 mb-6">Top Produits</h3>
                         <div className="space-y-4">
