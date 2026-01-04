@@ -7,7 +7,13 @@ import {
 import { toast } from 'react-hot-toast';
 
 // --- CONFIGURATION API ---
-const API_URL = "http://localhost:8000/api/v1";
+let apiUrl = "http://localhost:8000/api/v1";
+try {
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
+    apiUrl = import.meta.env.VITE_API_URL;
+  }
+} catch (e) {}
+const API_URL = apiUrl;
 
 // --- COMPOSANTS UI ---
 const Badge = ({ children, color = "bg-black" }) => (
