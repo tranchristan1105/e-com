@@ -1,41 +1,43 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 
-// --- CORRECTION ICI ---
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+// --- CONFIGURATION API ---
+let apiUrl = "http://localhost:8000/api/v1";
+try {
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
+    apiUrl = import.meta.env.VITE_API_URL;
+  }
+} catch (e) {}
+const API_URL = apiUrl;
 
 export const useTracking = () => {
-  const [userId] = useState(() => {
+  const track = useCallback(async (eventType, metadata = {}) => {
     try {
-      const stored = localStorage.getItem('ecommerce_user_id');
-      if (stored) return stored;
-      const newId = "user_" + Math.floor(Math.random() * 1000000);
-      localStorage.setItem('ecommerce_user_id', newId);
-      return newId;
-    } catch (e) {
-      return "user_fallback";
-    }
-  });
+      let uid = localStorage.getItem('empire_uid');
+      if (!uid) {
+        uid = 'user_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('empire_uid', uid);
+      }
 
-  const trackEvent = useCallback(async (eventType, metadata = {}) => {
-    try {
-      const payload = {
-        event_type: eventType,
-        user_id: userId,
-        timestamp: new Date().toISOString(),
-        page_url: window.location.pathname,
-        metadata: metadata
-      };
-      
-      console.log("📡 Tracking:", eventType, payload);
-
-      fetch(`${API_URL}/analytics`, {
+      // CHANGEMENT ICI : /analytics -> /activity
+      await fetch(`${API_URL}/activity`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }).catch(() => {}); 
+        body: JSON.stringify({
+          event_type: eventType,
+          user_id: uid,
+          page_url: window.location.pathname,
+          metadata: metadata
+        })
+      });
       
-    } catch (e) {}
-  }, [userId]);
+      if (window.location.hostname === 'localhost') {
+        console.log(`📡 Event envoyé : ${eventType}`);
+      }
 
-  return { trackEvent, userId };
+    } catch (e) {
+      console.warn("Erreur tracking", e);
+    }
+  }, []);
+
+  return { track };
 };
