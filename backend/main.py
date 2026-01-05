@@ -143,12 +143,13 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Empire E-commerce API")
 
-# Configuration CORS
+# Configuration CORS (Renforcée)
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:8000",
-    FRONTEND_URL
+    FRONTEND_URL,
+    FRONTEND_URL.rstrip("/")  # Accepte l'URL sans le slash final au cas où
 ]
 
 app.add_middleware(
@@ -398,8 +399,9 @@ def create_review(id: int, r: ReviewCreateSchema, db: Session = Depends(get_db))
     return nr
 
 
-# --- ANALYTICS (Nom modifié pour éviter AdBlock) ---
+# --- ANALYTICS (Double route pour compatibilité) ---
 
+@app.post("/api/v1/analytics")
 @app.post("/api/v1/activity")
 def track(e: AnalyticsSchema, db: Session = Depends(get_db)):
     print(f"📥 Tracking reçu: {e.event_type} - {e.page_url}", flush=True)
