@@ -2,26 +2,24 @@ import React, { useEffect, useState } from 'react';
 import { 
   BarChart3, Users, MousePointer, ShoppingBag, ArrowLeft, Trophy, 
   Package, MapPin, Plus, Trash2, X, RefreshCw, AlertTriangle, Tag, Image as ImageIcon,
-  Lock, LogOut, LayoutDashboard, Pencil, TrendingUp, Search, Bell, ChevronDown, Filter
+  Lock, LogOut, LayoutDashboard, Pencil, TrendingUp, Search, Bell, ChevronDown, Filter, Server
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 
 // --- CONFIGURATION API INTELLIGENTE ---
-// Cette logique bascule automatiquement entre Local et Prod
-let apiUrl = "http://localhost:8000/api/v1"; 
-
-// On essaie de lire la variable d'environnement définie sur Cloud Run
-try {
-  // @ts-ignore
-  if (import.meta.env.VITE_API_URL) {
-    apiUrl = import.meta.env.VITE_API_URL;
+const getApiUrl = () => {
+  // 1. Si on est sur localhost, on utilise le backend local
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return "http://localhost:8000/api/v1";
   }
-} catch (e) {
-  // En cas d'erreur locale, on reste sur localhost
-  console.log("Mode Développement Local");
-}
-const API_URL = apiUrl;
+
+  // 2. Sinon, on est en production (Cloud Run)
+  // On utilise l'URL de production en dur pour éviter les erreurs de compilation avec import.meta
+  return "https://ecommerce-backend-810577747496.europe-west9.run.app/api/v1"; 
+};
+
+const API_URL = getApiUrl();
 
 // --- UTILS UI ---
 const formatPrice = (price) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(price || 0);
@@ -64,6 +62,9 @@ const LoginScreen = ({ onLogin }) => {
             {loading ? <RefreshCw className="animate-spin mx-auto" /> : "Connexion"}
           </button>
         </form>
+        <div className="mt-8 text-xs text-center text-gray-400">
+            Connecting to: {API_URL}
+        </div>
       </div>
     </div>
   );
@@ -157,21 +158,41 @@ const DashboardPage = () => {
     if (!token) return;
     if (!background) setLoading(true);
     
-    setErrorMsg(null);
+    // On garde l'erreur précédente s'il y en a une, sauf si on refresh manuellement
+    if (!background) setErrorMsg(null);
+
     try {
-        console.log(`📡 Dashboard connectée à : ${API_URL}`);
+        console.log(`📡 Fetching data from: ${API_URL}`);
         
         // 1. Produits
-        const prodRes = await fetch(`${API_URL}/products`);
-        if (prodRes.ok) setProducts(await prodRes.json());
+        try {
+            const prodRes = await fetch(`${API_URL}/products`);
+            if (prodRes.ok) setProducts(await prodRes.json());
+            else throw new Error("Erreur chargement produits");
+        } catch(e) { 
+            console.error("Produits:", e); 
+            if (!background) setErrorMsg("Impossible de charger les produits. Vérifiez l'URL API.");
+        }
 
         // 2. Commandes
-        const ordRes = await authFetch('/orders');
-        if (ordRes.ok) setOrders(await ordRes.json());
+        try {
+            const ordRes = await authFetch('/orders');
+            if (ordRes.ok) setOrders(await ordRes.json());
+        } catch(e) { console.warn("Commandes:", e); }
 
         // 3. Stats
-        const stRes = await authFetch('/analytics/stats');
-        if (stRes.ok) setStats(await stRes.json());
+        try {
+            const stRes = await authFetch('/analytics/stats');
+            if (stRes.ok) {
+                const data = await stRes.json();
+                setStats(data);
+            } else {
+                throw new Error("Erreur stats");
+            }
+        } catch(e) { 
+            console.warn("Stats:", e);
+            if (!background && !errorMsg) setErrorMsg("Erreur chargement statistiques. Vérifiez que la base de données est accessible.");
+        }
 
     } catch (e) {
       if (!background) setErrorMsg(e.message);
@@ -181,16 +202,18 @@ const DashboardPage = () => {
     }
   };
 
+  // 1. Chargement initial + Auto-Refresh toutes les 5 secondes
   useEffect(() => {
     fetchData(); 
     const interval = setInterval(() => fetchData(true), 5000); 
     return () => clearInterval(interval);
   }, [token]);
 
+  // Fonction pour le bouton manuel
   const handleManualRefresh = () => {
     setIsRefreshing(true);
     fetchData(true);
-    toast.success("Données actualisées");
+    toast.success("Actualisation...");
   };
 
   if (!token) return <LoginScreen onLogin={(t) => { localStorage.setItem('empire_token', t); setToken(t); }} />;
@@ -226,7 +249,7 @@ const DashboardPage = () => {
     } catch(e) {}
   };
 
-  if (loading && !products.length) return <div className="h-screen flex items-center justify-center"><RefreshCw className="animate-spin text-blue-600"/></div>;
+  if (loading && !products.length) return <div className="h-screen flex items-center justify-center flex-col gap-4"><RefreshCw className="animate-spin text-blue-600"/><p className="text-gray-400 text-sm">Connexion à {API_URL}...</p></div>;
 
   const summary = stats?.summary || {};
   const funnel = summary.funnel || { '1_visitors': 0, '2_interested': 0, '3_converted': 0 };
@@ -236,13 +259,15 @@ const DashboardPage = () => {
 
   return (
     <div className="flex h-screen bg-gray-50 font-sans text-gray-900 overflow-hidden">
-      
       {/* SIDEBAR */}
       <aside className="w-72 bg-slate-900 text-white flex flex-col hidden md:flex shadow-xl z-20">
         <div className="p-8">
           <div className="flex items-center gap-3 mb-10">
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl">E</div>
             <div><h1 className="font-bold text-lg tracking-wide">EMPIRE</h1><p className="text-xs text-slate-400">WORKSPACE</p></div>
+          </div>
+          <div className="mb-4 px-2 py-1 bg-white/10 rounded text-[10px] text-gray-400 break-all">
+             API: {API_URL}
           </div>
           <nav className="space-y-2">
             <SidebarItem icon={BarChart3} label="Analytics" active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} />
@@ -261,7 +286,14 @@ const DashboardPage = () => {
         <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 z-10">
           <div className="flex items-center gap-4">
               <h2 className="text-xl font-bold text-gray-800 capitalize">{activeTab}</h2>
-              <button onClick={handleManualRefresh} className={`p-2 rounded-full hover:bg-gray-100 transition-all ${isRefreshing ? 'animate-spin text-blue-600' : 'text-gray-400'}`} title="Actualiser"><RefreshCw size={18} /></button>
+              {/* BOUTON REFRESH MANUEL */}
+              <button 
+                onClick={handleManualRefresh}
+                className={`p-2 rounded-full hover:bg-gray-100 transition-all ${isRefreshing ? 'animate-spin text-blue-600' : 'text-gray-400'}`}
+                title="Actualiser les données"
+              >
+                <RefreshCw size={18} />
+              </button>
           </div>
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-3 pl-6 border-l border-gray-100">
@@ -272,7 +304,16 @@ const DashboardPage = () => {
         </header>
 
         <main className="flex-1 overflow-y-auto bg-gray-50/50 p-8">
-          {errorMsg && <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6 flex items-center gap-2"><AlertTriangle/> {errorMsg}</div>}
+          {errorMsg && (
+            <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6 flex items-start gap-3 border border-red-100">
+                <AlertTriangle className="flex-shrink-0 mt-0.5"/> 
+                <div>
+                    <p className="font-bold">Erreur de connexion</p>
+                    <p className="text-sm">{errorMsg}</p>
+                    <p className="text-xs mt-2 text-red-400">Vérifiez que l'URL API ({API_URL}) est correcte et que le serveur tourne.</p>
+                </div>
+            </div>
+          )}
 
           {/* ANALYTICS */}
           {activeTab === 'analytics' && (
@@ -356,7 +397,7 @@ const DashboardPage = () => {
         </main>
       </div>
 
-      {/* MODALS (Identiques à avant) */}
+      {/* MODALS */}
       {isProductModalOpen && (
         <Modal title={editingProduct ? "Modifier" : "Nouveau Produit"} onClose={() => setProductModalOpen(false)}>
             <form onSubmit={handleSaveProduct} className="grid md:grid-cols-2 gap-6">
@@ -367,6 +408,9 @@ const DashboardPage = () => {
                 </div>
                 <div className="col-span-2 md:col-span-1 space-y-4">
                     <input className="w-full p-3 border rounded-xl" placeholder="Image URL" value={productForm.image_url} onChange={e => setProductForm({...productForm, image_url: e.target.value})} />
+                    <div className="h-48 bg-gray-100 rounded-2xl border-2 border-dashed flex items-center justify-center overflow-hidden">
+                        {productForm.image_url ? <img src={productForm.image_url} className="w-full h-full object-cover" onError={(e) => e.target.src='https://via.placeholder.com/200'}/> : <span className="text-gray-400">Aperçu</span>}
+                    </div>
                     <button className="w-full bg-black text-white font-bold py-3.5 rounded-xl">Enregistrer</button>
                 </div>
             </form>
