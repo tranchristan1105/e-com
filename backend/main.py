@@ -418,50 +418,79 @@ def track(e: AnalyticsSchema, db: Session = Depends(get_db)):
 
 
 @app.get("/api/v1/analytics/stats")
-def stats(db: Session = Depends(get_db), u: AdminUser = Depends(get_current_user)):
-    total = db.query(EventModel).count()
-    sales = db.query(func.sum(OrderModel.total_amount)).scalar() or 0.0
-    orders = db.query(OrderModel).count()
+def get_analytics_stats(db: Session = Depends(get_db), u: AdminUser = Depends(get_current_user)):
+    try:
+        # 1. COMPTAGES SIMPLES (C'est ce qui doit marcher à coup sûr)
+        total_events = db.query(EventModel).count()
+        orders_count = db.query(OrderModel).count()
+        
+        # Somme des ventes (Gère le cas où c'est NULL)
+        total_sales = db.query(func.sum(OrderModel.total_amount)).scalar() or 0.0
 
-    today = datetime.now()
-    dates_30 = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(29, -1, -1)]
-    dates_7 = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(6, -1, -1)]
-    chart_30 = {d: 0 for d in dates_30}
-    chart_7 = {d: 0 for d in dates_7}
+        # 2. TUNNEL DE CONVERSION (Basé sur le type d'événement, très robuste)
+        # On compte juste les lignes, pas de parsing JSON risqué
+        visits = db.query(EventModel).filter(EventModel.event_type == 'page_view').count()
+        interest = db.query(EventModel).filter(EventModel.event_type == 'view_item').count()
+        carts = db.query(EventModel).filter(EventModel.event_type == 'add_to_cart').count()
 
-    for o in db.query(OrderModel).all():
-        day = o.created_at[:10]
-        if day in chart_30:
-            chart_30[day] += o.total_amount
-        if day in chart_7:
-            chart_7[day] += o.total_amount
+        # 3. GRAPHIQUE VENTES (Optimisé)
+        today = datetime.now()
+        chart_30 = { (today - timedelta(days=i)).strftime("%Y-%m-%d"): 0 for i in range(29, -1, -1) }
+        chart_7 = { (today - timedelta(days=i)).strftime("%Y-%m-%d"): 0 for i in range(6, -1, -1) }
+        
+        orders = db.query(OrderModel).all()
+        for o in orders:
+            # Gestion robuste de la date (String ou Datetime)
+            d_str = str(o.created_at)[:10] 
+            if d_str in chart_30: chart_30[d_str] += (o.total_amount or 0)
+            if d_str in chart_7: chart_7[d_str] += (o.total_amount or 0)
 
-    stats_query = (
-        db.query(EventModel.event_type, func.count(EventModel.event_type))
-        .group_by(EventModel.event_type)
-        .all()
-    )
-    stats_by_type = {type_: count for type_, count in stats_query}
+        # 4. TOP PRODUITS (Avec protection anti-crash)
+        top_products = {}
+        # On essaie de récupérer les tops produits, mais si ça plante (JSON invalide), on ne casse pas tout le dashboard
+        try:
+            view_events = db.query(EventModel).filter(EventModel.event_type == 'view_item').limit(500).all()
+            for ev in view_events:
+                if ev.metadata_json:
+                    meta = json.loads(ev.metadata_json)
+                    name = meta.get('name', 'Inconnu')
+                    top_products[name] = top_products.get(name, 0) + 1
+            # Tri
+            top_products = dict(sorted(top_products.items(), key=lambda item: item[1], reverse=True)[:5])
+        except Exception as e:
+            print(f"⚠️ Erreur calcul Top Produits: {e}")
+            # On laisse vide si erreur, mais le reste s'affichera
 
-    return {
-        "summary": {
-            "total_sales": sales,
-            "total_orders": orders,
-            "total_events": total,
-            "sales_chart": {
-                "30d": [{"date": d, "amount": v} for d, v in chart_30.items()],
-                "7d": [{"date": d, "amount": v} for d, v in chart_7.items()],
+        return {
+            "summary": {
+                "total_sales": total_sales,
+                "total_orders": orders_count,
+                "total_events": total_events,
+                "sales_chart": {
+                    "30d": [{"date": d, "amount": v} for d, v in chart_30.items()],
+                    "7d": [{"date": d, "amount": v} for d, v in chart_7.items()]
+                },
+                "top_products": top_products,
+                "funnel": {
+                    "1_visitors": visits,
+                    "2_interested": interest,
+                    "3_converted": carts
+                }
             },
-            "top_products": {},
-            "funnel": {
-                "1_visitors": stats_by_type.get("page_view", 0),
-                "2_interested": stats_by_type.get("view_item", 0),
-                "3_converted": stats_by_type.get("add_to_cart", 0),
+            "recent_logs": []
+        }
+    except Exception as e:
+        print(f"❌ CRITICAL STATS ERROR: {e}")
+        # Renvoie des zéros au lieu de planter l'API (Erreur 500)
+        return {
+            "summary": {
+                "total_sales": 0, "total_orders": 0, "total_events": 0,
+                "sales_chart": {"30d": [], "7d": []},
+                "top_products": {}, 
+                "funnel": {"1_visitors": 0, "2_interested": 0, "3_converted": 0}
             },
-        },
-        "recent_logs": [],
-    }
-
+            "recent_logs": []
+        }
 
 @app.get("/api/v1/orders")
 def get_orders(db: Session = Depends(get_db), u: AdminUser = Depends(get_current_user)):
