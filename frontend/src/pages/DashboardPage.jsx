@@ -8,18 +8,13 @@ import { Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 
 // --- CONFIGURATION API INTELLIGENTE ---
-const getApiUrl = () => {
-  // 1. Si on est sur localhost, on utilise le backend local
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return "http://localhost:8000/api/v1";
+let apiUrl = "http://localhost:8000/api/v1";
+try {
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
+    apiUrl = import.meta.env.VITE_API_URL;
   }
-
-  // 2. Sinon, on est en production (Cloud Run)
-  // On utilise l'URL de production en dur pour éviter les erreurs de compilation avec import.meta
-  return "https://ecommerce-backend-810577747496.europe-west9.run.app/api/v1"; 
-};
-
-const API_URL = getApiUrl();
+} catch (e) {}
+const API_URL = apiUrl;
 
 // --- UTILS UI ---
 const formatPrice = (price) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(price || 0);
