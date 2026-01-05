@@ -2,11 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { 
   Star, ShoppingBag, Truck, ShieldCheck, ChevronDown, 
-  ArrowLeft, Share2, Heart, Check, Plus, Minus, RefreshCw, AlertTriangle, ArrowRight, Zap
+  ArrowLeft, Share2, Heart, Check, Plus, Minus, RefreshCw, AlertTriangle, ArrowRight, Zap, Gem
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-
-// Import du contexte panier activé
 import { useCart } from '../context/CartContext';
 
 // --- CONFIGURATION API ---
@@ -28,31 +26,31 @@ const formatPrice = (price) => {
   }
 };
 
-// --- COMPOSANTS UI TECH/LUXE ---
+// --- COMPOSANTS UI DARK LUXE ---
 
 const TechSpec = ({ icon: Icon, label, value }) => (
-  <div className="flex flex-col p-4 bg-gray-50 rounded-xl border border-transparent hover:border-gray-200 transition-all duration-300">
-    <Icon className="text-black mb-2" size={24} strokeWidth={1.5} />
-    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{label}</span>
-    <span className="text-sm font-semibold text-gray-900 mt-1">{value}</span>
+  <div className="flex flex-col p-4 bg-white/5 backdrop-blur-sm rounded-sm border border-white/10 hover:border-yellow-600/50 transition-all duration-300 group">
+    <Icon className="text-yellow-600 mb-3 group-hover:scale-110 transition-transform duration-500" size={24} strokeWidth={1} />
+    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{label}</span>
+    <span className="text-sm font-serif text-gray-200 mt-1">{value}</span>
   </div>
 );
 
 const Accordion = ({ title, children, defaultOpen = false }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
-    <div className="border-t border-gray-200 py-4 first:border-t-0">
+    <div className="border-t border-white/10 py-5 first:border-t-0">
       <button 
         onClick={() => setIsOpen(!isOpen)} 
         className="w-full flex justify-between items-center text-left group"
       >
-        <span className="font-bold text-lg text-gray-900 group-hover:text-gray-600 transition-colors">{title}</span>
-        <span className={`text-xl transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}>
-          <ChevronDown size={20} />
+        <span className="font-serif text-lg text-gray-200 group-hover:text-yellow-500 transition-colors tracking-wide">{title}</span>
+        <span className={`text-xl text-gray-500 transition-transform duration-500 ${isOpen ? 'rotate-180 text-white' : ''}`}>
+          <ChevronDown size={20} strokeWidth={1} />
         </span>
       </button>
-      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isOpen ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
-        <div className="text-gray-600 leading-relaxed text-sm">
+      <div className={`overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] ${isOpen ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
+        <div className="text-gray-400 leading-relaxed text-sm font-light">
           {children}
         </div>
       </div>
@@ -62,8 +60,6 @@ const Accordion = ({ title, children, defaultOpen = false }) => {
 
 const ProductPage = () => {
   const { id } = useParams();
-  
-  // Utilisation réelle du contexte panier
   const { addToCart } = useCart();
 
   const [product, setProduct] = useState(null);
@@ -72,12 +68,11 @@ const ProductPage = () => {
   const [error, setError] = useState(null);
   
   const [quantity, setQuantity] = useState(1);
-  const [selectedSize, setSelectedSize] = useState('M'); // Simulation taille
+  const [activeImage, setActiveImage] = useState(0); 
+  const [selectedSize, setSelectedSize] = useState('Standard');
 
   useEffect(() => {
-    // Force le scroll en haut de page à l'arrivée sur la fiche produit
     window.scrollTo(0, 0);
-
     const fetchData = async () => {
       if (!id) return;
       setLoading(true);
@@ -96,21 +91,21 @@ const ProductPage = () => {
             if (Array.isArray(all)) setRelatedProducts(all.filter(p => p.id !== parseInt(id)).slice(0, 3));
           }
         } else {
-          throw new Error("Produit introuvable ou API éteinte");
+          throw new Error("Produit introuvable");
         }
       } catch (e) {
         console.warn("Mode Fallback activé:", e);
         setProduct({
             id: 1,
-            name: "Empire Edition Gold (Pro Max)",
-            price: 1299.00,
-            category: "Premium Tech",
-            description: "Une ingénierie de précision pour une performance sans compromis. Le design rencontre la puissance brute dans un châssis en titane aérospatial.",
-            image_url: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=1200"
+            name: "La Planche Titan™ (Édition Chef)",
+            price: 89.90,
+            category: "Signature",
+            description: "Forgée dans un titane de grade aérospatial, cette pièce maîtresse redéfinit l'hygiène et l'élégance en cuisine. Surface antibactérienne, inaltérable et garantie à vie.",
+            image_url: "https://images.unsplash.com/photo-1628103598586-b4d216f40396?q=80&w=2000&auto=format&fit=crop"
         });
         setRelatedProducts([
-            {id: 99, name: "Audio Master", price: 349, image_url: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800"},
-            {id: 98, name: "Urban Runner", price: 199, image_url: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800"}
+            {id: 99, name: "Couteau Damas", price: 149.90, image_url: "https://images.unsplash.com/photo-1593642632823-8f78536788c6?w=800"},
+            {id: 98, name: "Bloc Sommelier", price: 59.90, image_url: "https://images.unsplash.com/photo-1585553616435-2dc0a54e271d?w=800"}
         ]);
       } finally {
         setLoading(false);
@@ -123,112 +118,136 @@ const ProductPage = () => {
     if (!product) return;
     addToCart(product, quantity);
     toast.success(
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-black rounded flex items-center justify-center text-white"><ShoppingBag size={18} /></div>
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 bg-[#1c1917] border border-yellow-600/30 rounded-sm flex items-center justify-center text-yellow-500">
+            <ShoppingBag size={20} />
+        </div>
         <div>
-          <p className="font-bold text-sm">Ajouté au panier</p>
-          <p className="text-xs text-gray-500">{product.name}</p>
+          <p className="font-serif font-bold text-sm text-gray-900">Ajouté au panier</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider">{product.name}</p>
         </div>
       </div>, 
       {
-        style: { borderRadius: '12px', border: '1px solid #eee', boxShadow: '0 8px 30px rgba(0,0,0,0.08)' },
-        duration: 3000
+        style: { borderRadius: '4px', background: '#fff', border: '1px solid #e7e5e4', padding: '16px', boxShadow: '0 20px 50px rgba(0,0,0,0.1)' },
+        duration: 4000
     });
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-white text-black">
-        <div className="w-16 h-16 border-4 border-gray-100 border-t-black rounded-full animate-spin"></div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#0c0a09] text-yellow-600">
+        <RefreshCw className="animate-spin mb-4" size={32} />
+        <span className="text-xs uppercase tracking-[0.3em] font-bold text-gray-500">Chargement de la pièce...</span>
       </div>
     );
   }
 
   if (error || !product) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-white p-4">
-        <AlertTriangle size={48} className="mb-4 text-red-500" />
-        <h2 className="text-2xl font-bold tracking-tight">Produit introuvable</h2>
-        <Link to="/" className="mt-6 px-6 py-3 bg-black text-white rounded-full font-medium hover:scale-105 transition-transform">Retour à la boutique</Link>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#0c0a09] text-white">
+        <AlertTriangle size={48} className="mb-4 text-yellow-600" />
+        <h2 className="text-2xl font-serif mb-4">Pièce introuvable</h2>
+        <Link to="/" className="text-xs font-bold uppercase tracking-widest border-b border-yellow-600 pb-1 hover:text-yellow-600 transition-colors">Retour à la collection</Link>
       </div>
     );
   }
 
+  // Image courante
+  const currentImage = activeImage === 0 ? product.image_url : `https://source.unsplash.com/random/800x800?sig=${activeImage + product.id}`;
+
   return (
-    <div className="bg-white min-h-screen font-sans text-black selection:bg-black selection:text-white">
+    <div className="bg-[#0c0a09] min-h-screen font-sans text-gray-200 selection:bg-yellow-600 selection:text-white pb-32">
       
-      {/* HEADER FLOTTANT */}
-      <nav className="fixed w-full z-50 top-0 left-0 bg-white/80 backdrop-blur-md border-b border-gray-100/50">
-        <div className="max-w-[1800px] mx-auto px-6 h-16 flex items-center justify-between">
-            <Link to="/" className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider hover:opacity-60 transition-opacity">
-                <ArrowLeft size={18} /> <span className="hidden sm:inline">Retour</span>
+      {/* HEADER NAVIGATION FLOTTANT */}
+      <nav className="fixed w-full z-50 top-0 left-0 bg-[#0c0a09]/80 backdrop-blur-md border-b border-white/5">
+        <div className="max-w-[1800px] mx-auto px-6 h-20 flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.15em] text-gray-400 hover:text-white transition-colors group">
+                <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> 
+                <span className="hidden sm:inline">Retour Collection</span>
             </Link>
-            <span className="font-bold text-lg tracking-tight hidden md:block">{product.name}</span>
-            <div className="flex gap-4">
-                <button className="hover:scale-110 transition-transform"><Share2 size={20} /></button>
-                <button className="hover:scale-110 transition-transform"><Heart size={20} /></button>
+            
+            <div className="flex gap-6 text-gray-400">
+                <button className="hover:text-yellow-500 transition-colors"><Share2 size={20} strokeWidth={1} /></button>
+                <button className="hover:text-yellow-500 transition-colors"><Heart size={20} strokeWidth={1} /></button>
             </div>
         </div>
       </nav>
 
-      <div className="pt-16 max-w-[1800px] mx-auto">
-        <div className="flex flex-col lg:flex-row">
+      <div className="pt-24 max-w-[1600px] mx-auto px-4 md:px-8">
+        <div className="flex flex-col lg:flex-row gap-12 xl:gap-24">
             
-            {/* GAUCHE : GALERIE VERTICALE (IMMERSIVE) */}
-            <div className="lg:w-7/12 xl:w-2/3 bg-gray-50 flex flex-col gap-4 p-4 lg:p-0">
-                {/* Image Principale (Grande) */}
-                <div className="w-full h-[60vh] lg:h-screen relative overflow-hidden group">
+            {/* GAUCHE : GALERIE IMMERSIVE */}
+            <div className="lg:w-7/12 xl:w-2/3 flex flex-col gap-6">
+                {/* Image Principale */}
+                <div className="w-full aspect-[4/5] relative overflow-hidden group border border-white/5">
                     <img 
-                        src={product.image_url} 
+                        src={currentImage} 
                         alt={product.name} 
-                        className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
-                        onError={(e) => e.target.src='https://via.placeholder.com/1200x1600'}
+                        className="w-full h-full object-cover object-center transition-transform duration-[1.5s] ease-out group-hover:scale-105"
+                        onError={(e) => e.target.src='https://via.placeholder.com/1200x1600?text=Image+Non+Disponible'}
                     />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0c0a09] via-transparent to-transparent opacity-60"></div>
+                    
+                    {/* Badge Catégorie */}
+                    <div className="absolute top-6 left-6">
+                         <span className="bg-white/10 backdrop-blur-md border border-white/10 text-white text-[10px] font-bold px-4 py-2 uppercase tracking-[0.2em]">
+                            {product.category || "Collection"}
+                        </span>
+                    </div>
                 </div>
-                {/* Images Secondaires (Simulées pour le style) */}
-                <div className="grid grid-cols-2 gap-4 lg:hidden">
-                     <img src={`https://source.unsplash.com/random/800x800?sig=${product.id+1}`} className="rounded-xl" alt="" />
-                     <img src={`https://source.unsplash.com/random/800x800?sig=${product.id+2}`} className="rounded-xl" alt="" />
+
+                {/* Miniatures */}
+                <div className="grid grid-cols-4 gap-4">
+                     {[0, 1, 2, 3].map((i) => (
+                        <div 
+                            key={i} 
+                            onClick={() => setActiveImage(i)} 
+                            className={`aspect-square cursor-pointer overflow-hidden border transition-all duration-300 ${activeImage === i ? 'border-yellow-600 opacity-100' : 'border-transparent opacity-50 hover:opacity-100'}`}
+                        >
+                            <img src={i === 0 ? product.image_url : `https://source.unsplash.com/random/200x200?sig=${i + product.id}`} className="w-full h-full object-cover" alt="thumbnail"/>
+                        </div>
+                     ))}
                 </div>
             </div>
 
-            {/* DROITE : DÉTAILS & ACHAT (STICKY) */}
-            <div className="lg:w-5/12 xl:w-1/3 p-6 lg:p-12 xl:p-16 flex flex-col justify-center relative bg-white">
-                <div className="lg:sticky lg:top-24 max-w-lg mx-auto w-full space-y-8">
+            {/* DROITE : DÉTAILS & COMMANDE */}
+            <div className="lg:w-5/12 xl:w-1/3 flex flex-col relative">
+                <div className="lg:sticky lg:top-32 space-y-10">
                     
                     {/* Titre & Prix */}
-                    <div className="space-y-4 border-b border-gray-100 pb-8">
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className="bg-black text-white text-[10px] font-bold px-2 py-1 uppercase tracking-widest rounded-sm">Nouveau</span>
-                            <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{product.category}</span>
-                        </div>
-                        <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-none text-gray-900">
+                    <div className="space-y-6 border-b border-white/10 pb-8">
+                        <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl text-white leading-[1.1] tracking-tight">
                             {product.name}
                         </h1>
                         <div className="flex justify-between items-end">
-                            <span className="text-3xl font-medium tracking-tight text-gray-900">{formatPrice(product.price)}</span>
-                            <div className="flex items-center gap-1 text-sm font-medium">
-                                <Star size={16} className="fill-black text-black" />
-                                <span>4.9</span>
-                                <span className="text-gray-400 underline ml-1 cursor-pointer">128 avis</span>
+                            <span className="text-3xl font-light text-yellow-500 font-serif">
+                                {formatPrice(product.price)}
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <div className="flex text-yellow-600">
+                                    {[1,2,3,4,5].map(i => <Star key={i} size={14} fill="currentColor" />)}
+                                </div>
+                                <span className="text-xs uppercase tracking-widest text-gray-500 border-b border-gray-700 pb-0.5 cursor-pointer hover:text-white hover:border-white transition-colors">
+                                    Lire les avis
+                                </span>
                             </div>
                         </div>
                     </div>
 
                     {/* Description */}
-                    <p className="text-gray-600 leading-relaxed font-medium">
-                        {product.description || "L'excellence redéfinie. Conçu pour ceux qui exigent le meilleur de la technologie et du style."}
+                    <p className="text-gray-400 leading-loose font-light text-lg">
+                        {product.description}
                     </p>
 
-                    {/* Sélecteurs (Taille/Option) */}
+                    {/* Sélecteurs */}
                     <div className="space-y-4">
-                        <span className="text-sm font-bold uppercase tracking-wider text-gray-900">Modèle</span>
-                        <div className="grid grid-cols-3 gap-3">
-                            {['Standard', 'Pro', 'Ultra'].map((size) => (
+                        <span className="text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Finition</span>
+                        <div className="flex gap-4">
+                            {['Standard', 'Premium'].map((size) => (
                                 <button 
                                     key={size}
                                     onClick={() => setSelectedSize(size)}
-                                    className={`py-3 rounded-lg border-2 text-sm font-bold transition-all ${selectedSize === size ? 'border-black bg-black text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}
+                                    className={`px-6 py-3 border text-xs font-bold uppercase tracking-widest transition-all duration-300 ${selectedSize === size ? 'border-yellow-600 bg-yellow-600/10 text-white' : 'border-white/20 text-gray-500 hover:border-white/50 hover:text-white'}`}
                                 >
                                     {size}
                                 </button>
@@ -236,48 +255,53 @@ const ProductPage = () => {
                         </div>
                     </div>
 
-                    {/* Bouton d'Action (Gros CTA) */}
-                    <div className="pt-4 space-y-4">
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center border-2 border-gray-200 rounded-xl px-4 h-14 w-32 hover:border-black transition-colors">
-                                <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="p-2 hover:bg-gray-100 rounded"><Minus size={16}/></button>
-                                <span className="flex-1 text-center font-bold text-lg">{quantity}</span>
-                                <button onClick={() => setQuantity(quantity + 1)} className="p-2 hover:bg-gray-100 rounded"><Plus size={16}/></button>
+                    {/* Actions d'achat */}
+                    <div className="pt-6 space-y-6">
+                        <div className="flex gap-4">
+                            {/* Compteur */}
+                            <div className="flex items-center border border-white/20 h-16 w-32 bg-white/5 backdrop-blur-sm">
+                                <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="w-10 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-white"><Minus size={14}/></button>
+                                <span className="flex-1 text-center font-serif text-xl text-white">{quantity}</span>
+                                <button onClick={() => setQuantity(quantity + 1)} className="w-10 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-white"><Plus size={14}/></button>
                             </div>
+                            
+                            {/* Bouton Principal */}
                             <button 
                                 onClick={handleAddToCart}
-                                className="flex-1 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg shadow-xl shadow-blue-200 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
+                                className="flex-1 h-16 bg-white text-black hover:bg-yellow-500 hover:text-black transition-all duration-500 font-bold uppercase tracking-[0.2em] text-xs flex items-center justify-between px-8 group shadow-[0_0_30px_rgba(255,255,255,0.1)]"
                             >
-                                <span>Ajouter</span> <ArrowRight size={20} />
+                                <span>Ajouter au panier</span> 
+                                <ArrowRight size={18} className="transform group-hover:translate-x-2 transition-transform"/>
                             </button>
                         </div>
-                        <div className="flex justify-center gap-6 text-xs font-bold text-gray-500 uppercase tracking-wide pt-2">
-                            <span className="flex items-center gap-1"><Zap size={14} className="text-yellow-500 fill-yellow-500" /> Expédition 24h</span>
-                            <span className="flex items-center gap-1"><ShieldCheck size={14} /> Garantie 2 ans</span>
+
+                        {/* Réassurance Rapide */}
+                        <div className="flex justify-center gap-8 text-[10px] font-bold uppercase tracking-widest text-gray-500 pt-2">
+                            <span className="flex items-center gap-2"><Zap size={14} className="text-yellow-600" /> Expédition 24h</span>
+                            <span className="flex items-center gap-2"><ShieldCheck size={14} className="text-yellow-600" /> Garantie à vie</span>
                         </div>
                     </div>
 
-                    {/* Specs Grid */}
-                    <div className="grid grid-cols-2 gap-4 py-6">
-                        <TechSpec icon={ShieldCheck} label="Durabilité" value="Grade Militaire" />
-                        <TechSpec icon={Truck} label="Livraison" value="Offerte > 100€" />
-                        <TechSpec icon={RefreshCw} label="Retours" value="30 Jours" />
-                        <TechSpec icon={Check} label="Stock" value="Disponible" />
+                    {/* Grille Specs */}
+                    <div className="grid grid-cols-2 gap-4 py-8 border-t border-white/10">
+                        <TechSpec icon={Gem} label="Matériau" value="Titane Pur" />
+                        <TechSpec icon={ShieldCheck} label="Hygiène" value="Antibactérien" />
+                        <TechSpec icon={Truck} label="Livraison" value="Offerte" />
+                        <TechSpec icon={RefreshCw} label="Satisfait" value="30 Jours" />
                     </div>
 
                     {/* Accordéons */}
                     <div>
-                        <Accordion title="Caractéristiques Techniques">
-                            <ul className="list-disc list-inside space-y-1 marker:text-black">
-                                <li>Processeur Neural Engine</li>
-                                <li>Châssis en alliage premium</li>
-                                <li>Résistance eau/poussière IP68</li>
+                        <Accordion title="Caractéristiques & Dimensions">
+                            <ul className="list-disc list-inside space-y-2 marker:text-yellow-600">
+                                <li>Titane de grade médical (Ti-6Al-4V)</li>
+                                <li>Surface micro-texturée anti-rayures</li>
+                                <li>Épaisseur : 2mm (Ultra-fin)</li>
+                                <li>Poids : 450g</li>
                             </ul>
                         </Accordion>
-                        <Accordion title="Contenu du coffret">
-                            <p>1x {product.name}</p>
-                            <p>1x Câble de charge haute vitesse</p>
-                            <p>1x Guide de démarrage rapide</p>
+                        <Accordion title="Entretien & Garantie">
+                            <p>Compatible lave-vaisselle. Ne rouille jamais. Garantie à vie contre la déformation et la corrosion.</p>
                         </Accordion>
                     </div>
 
@@ -285,37 +309,34 @@ const ProductPage = () => {
             </div>
         </div>
 
-        {/* CROSS SELL (Grille Moderne) */}
+        {/* SECTION CROSS-SELL (Inspiration) */}
         {relatedProducts.length > 0 && (
-            <div className="mt-32 pb-24 px-6 max-w-[1800px] mx-auto border-t border-gray-100 pt-24">
-                <div className="flex justify-between items-end mb-12">
-                    <h2 className="text-3xl md:text-4xl font-black tracking-tighter">Cela pourrait vous plaire.</h2>
-                    <Link to="/" className="hidden md:flex items-center font-bold text-sm border-b-2 border-black pb-1 hover:opacity-60 transition-opacity">
-                        Tout voir
+            <div className="mt-40 pt-24 border-t border-white/5">
+                <div className="flex justify-between items-end mb-16">
+                    <h2 className="font-serif text-3xl md:text-5xl text-white">Complétez l'expérience</h2>
+                    <Link to="/" className="hidden md:block text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-white border-b border-transparent hover:border-white pb-1 transition-all">
+                        Voir la collection
                     </Link>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     {relatedProducts.map((rel) => (
                         <Link to={`/product/${rel.id}`} key={rel.id} className="group block cursor-pointer">
-                            <div className="aspect-[4/3] bg-gray-100 rounded-2xl overflow-hidden mb-4 relative">
+                            <div className="aspect-[4/5] bg-[#141210] mb-6 overflow-hidden relative border border-white/5 group-hover:border-white/20 transition-colors">
                                 <img 
                                     src={rel.image_url} 
                                     alt={rel.name} 
-                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-                                    onError={(e) => e.target.src='https://via.placeholder.com/600x400'}
+                                    className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700" 
+                                    onError={(e) => e.target.src='https://via.placeholder.com/600x800'}
                                 />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300"></div>
-                                <button className="absolute bottom-4 right-4 bg-white text-black p-3 rounded-full shadow-lg opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
-                                    <Plus size={20} />
-                                </button>
+                                <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors"></div>
                             </div>
                             <div className="flex justify-between items-start">
                                 <div>
-                                    <h3 className="font-bold text-lg text-gray-900 group-hover:text-blue-600 transition-colors">{rel.name}</h3>
-                                    <span className="text-sm text-gray-500">Edition Limitée</span>
+                                    <h3 className="font-serif text-xl text-white group-hover:text-yellow-500 transition-colors">{rel.name}</h3>
+                                    <span className="text-xs uppercase tracking-widest text-gray-600">Accessoire</span>
                                 </div>
-                                <span className="font-bold text-lg">{formatPrice(rel.price)}</span>
+                                <span className="font-light text-lg text-yellow-600">{formatPrice(rel.price)}</span>
                             </div>
                         </Link>
                     ))}

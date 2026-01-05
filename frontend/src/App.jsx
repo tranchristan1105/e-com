@@ -1,36 +1,73 @@
 import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { X } from 'lucide-react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { X, ShoppingBag } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 
-// Import des contextes et composants
-import { CartProvider } from './context/CartContext';
+// --- IMPORTS RÉELS (Activés) ---
+import { CartProvider, useCart } from './context/CartContext';
 import { MarketingPixels } from './components/MarketingPixels';
-import Navbar from './components/Navbar';
 import CartPanel from './components/CartPanel';
 
-// Import des Pages Principales
+// Pages Principales
 import HomePage from './pages/HomePage';
 import ProductPage from './pages/ProductPage';
 import DashboardPage from './pages/DashboardPage';
 import SuccessPage from './pages/SuccessPage';
 import CancelPage from './pages/CancelPage';
 
-// Import des Pages Légales
+// Pages Légales
 import { LegalNotice, TermsOfSales, PrivacyPolicy, ShippingPolicy } from './pages/LegalPages';
 
-// Composant Bandeau Promo
+// --- NAVBAR NOIRE (Design Luxe) ---
+const Navbar = () => {
+    // Utilisation du vrai hook useCart
+    const { toggleCart, cart } = useCart();
+    
+    return (
+        <nav className="bg-[#0c0a09] text-white border-b border-white/10 sticky top-0 z-40 transition-all duration-300">
+            <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+                {/* Logo */}
+                <Link to="/" className="font-serif text-2xl tracking-[0.2em] font-bold hover:text-yellow-500 transition-colors">
+                    EMPIRE.
+                </Link>
+                
+                {/* Menu Droite */}
+                <div className="flex items-center gap-8 text-xs font-bold uppercase tracking-widest">
+                    <Link to="/" className="hidden md:block hover:text-yellow-500 transition-colors">Accueil</Link>
+                    <Link to="/legal" className="hidden md:block hover:text-yellow-500 transition-colors">Légal</Link>
+                    
+                    <button 
+                        type="button"
+                        onClick={toggleCart} 
+                        className="flex items-center gap-2 hover:text-yellow-500 transition-colors relative group cursor-pointer"
+                    >
+                        <div className="relative">
+                            <ShoppingBag size={20} />
+                            {cart && cart.length > 0 && (
+                                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-yellow-600 text-white text-[9px] flex items-center justify-center rounded-full border border-[#0c0a09]">
+                                    {cart.length}
+                                </span>
+                            )}
+                        </div>
+                        <span className="hidden md:inline group-hover:underline underline-offset-4 decoration-yellow-500">Panier</span>
+                    </button>
+                </div>
+            </div>
+        </nav>
+    );
+};
+
+// --- BANDEAU PROMO ---
 const PromoBanner = () => {
   const [isVisible, setIsVisible] = useState(true);
   if (!isVisible) return null;
   
   return (
-    <div className="bg-black text-white text-xs md:text-sm py-2.5 px-4 text-center relative z-[60]">
-      <span className="font-medium">🎉 OFFRE DE LANCEMENT : </span>
-      <span className="text-gray-300">Livraison offerte dès 50€ </span>
+    <div className="bg-yellow-600 text-white text-[10px] font-bold py-2 px-4 text-center relative z-50 tracking-[0.15em] uppercase">
+      <span className="opacity-90">Livraison offerte dès 50€ d'achat • Expédition 24h</span>
       <button 
         onClick={() => setIsVisible(false)}
-        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+        className="absolute right-4 top-1/2 -translate-y-1/2 hover:text-black transition-colors"
       >
         <X size={14} />
       </button>
@@ -45,12 +82,12 @@ export default function App() {
         {/* On injecte les pixels ici pour qu'ils aient accès au Router */}
         <MarketingPixels />
         
-        <div className="min-h-screen bg-white text-gray-900 font-sans selection:bg-black selection:text-white flex flex-col">
+        <div className="min-h-screen bg-white text-gray-900 font-sans selection:bg-yellow-600 selection:text-white flex flex-col">
           <Toaster 
             position="bottom-center"
             toastOptions={{
-              style: { background: '#333', color: '#fff', borderRadius: '8px', fontSize: '14px' },
-              success: { iconTheme: { primary: '#fff', secondary: '#333' } },
+              style: { background: '#0c0a09', color: '#fff', borderRadius: '0px', border: '1px solid #333' },
+              success: { iconTheme: { primary: '#ca8a04', secondary: '#fff' } },
             }}
           />
           
@@ -67,7 +104,7 @@ export default function App() {
                 <Route path="/success" element={<SuccessPage />} />
                 <Route path="/cancel" element={<CancelPage />} />
 
-                {/* Routes Légales High-End */}
+                {/* Routes Légales */}
                 <Route path="/legal" element={<LegalNotice />} />
                 <Route path="/terms" element={<TermsOfSales />} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />
