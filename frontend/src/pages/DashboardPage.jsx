@@ -261,9 +261,6 @@ const DashboardPage = () => {
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl">E</div>
             <div><h1 className="font-bold text-lg tracking-wide">EMPIRE</h1><p className="text-xs text-slate-400">WORKSPACE</p></div>
           </div>
-          <div className="mb-4 px-2 py-1 bg-white/10 rounded text-[10px] text-gray-400 break-all">
-             API: {API_URL}
-          </div>
           <nav className="space-y-2">
             <SidebarItem icon={BarChart3} label="Analytics" active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} />
             <SidebarItem icon={ShoppingBag} label="Commandes" active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} />

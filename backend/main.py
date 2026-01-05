@@ -203,15 +203,79 @@ async def get_current_user(
 
 
 def create_email_html(customer_name, amount, items_list, address):
-    items_html = ""
+    # Création des lignes de produits
+    rows_html = ""
     for item in items_list:
-        items_html += f"<li>{item}</li>"
+        # On suppose que item est une string "Nom (Prix€)"
+        rows_html += f"""
+        <tr>
+            <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #374151; font-size: 14px;">{item}</td>
+            <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; text-align: right; color: #111827; font-weight: 600; font-size: 14px;">Inclus</td>
+        </tr>
+        """
     
+    # Template HTML
     return f"""
-    <h1>Merci {customer_name}!</h1>
-    <p>Total: {amount}€</p>
-    <ul>{items_html}</ul>
-    <p>Livraison à : {address.get('city', 'Non spécifié')}</p>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body {{ margin: 0; padding: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f3f4f6; }}
+            .container {{ max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 2px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }}
+            .header {{ background-color: #0c0a09; padding: 40px; text-align: center; }}
+            .logo {{ color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: 4px; margin: 0; text-transform: uppercase; }}
+            .content {{ padding: 40px; }}
+            .h2 {{ color: #111827; font-size: 20px; font-weight: 600; margin-top: 0; margin-bottom: 16px; }}
+            .text {{ color: #4b5563; font-size: 16px; line-height: 24px; margin-bottom: 24px; }}
+            .order-box {{ background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px; margin-bottom: 32px; }}
+            .total-row {{ display: flex; justify-content: space-between; margin-top: 16px; padding-top: 16px; border-top: 2px solid #e5e7eb; }}
+            .total-label {{ font-size: 16px; font-weight: 600; color: #374151; }}
+            .total-value {{ font-size: 20px; font-weight: 800; color: #111827; }}
+            .address-box {{ margin-top: 32px; padding-top: 32px; border-top: 1px solid #e5e7eb; }}
+            .footer {{ background-color: #f9fafb; padding: 32px; text-align: center; color: #9ca3af; font-size: 12px; }}
+            .btn {{ display: inline-block; background-color: #0c0a09; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 4px; font-weight: 600; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin-top: 10px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1 class="logo">EMPIRE.</h1>
+            </div>
+            <div class="content">
+                <h2 class="h2">Merci {customer_name},</h2>
+                <p class="text">Votre commande a été confirmée avec succès. Nous préparons votre colis avec le plus grand soin. Voici le récapitulatif de votre sélection.</p>
+                
+                <div class="order-box">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        {rows_html}
+                    </table>
+                    <div style="margin-top: 16px; padding-top: 16px; border-top: 2px solid #e5e7eb; text-align: right;">
+                        <span style="font-size: 14px; color: #6b7280; text-transform: uppercase; letter-spacing: 1px;">Total Payé</span><br>
+                        <span style="font-size: 24px; font-weight: 800; color: #111827;">{amount} €</span>
+                    </div>
+                </div>
+
+                <div class="address-box">
+                    <p style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #9ca3af; letter-spacing: 1px; margin-bottom: 8px;">Adresse de livraison</p>
+                    <p style="margin: 0; color: #111827; font-weight: 500;">
+                        {address.get('line1', '')}<br>
+                        {address.get('postal_code', '')} {address.get('city', '')}<br>
+                        {address.get('country', '')}
+                    </p>
+                </div>
+
+                <div style="text-align: center; margin-top: 40px;">
+                    <a href="{FRONTEND_URL}" class="btn">Retour à la boutique</a>
+                </div>
+            </div>
+            <div class="footer">
+                <p>&copy; 2025 Empire Inc. L'excellence à portée de main.</p>
+                <p>Paris • New York • Tokyo</p>
+            </div>
+        </div>
+    </body>
+    </html>
     """
 
 
