@@ -1,65 +1,59 @@
 import React from 'react';
-import { Package, Facebook, Twitter, Instagram, Linkedin } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const Footer = () => {
   return (
-    <footer className="bg-white border-t border-slate-100 pt-16 pb-8 mt-24">
-      <div className="max-w-7xl mx-auto px-4">
+    <footer className="bg-[#0c0a09] text-gray-400 py-16 border-t border-white/10 mt-auto">
+      <div className="container mx-auto px-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
-          
           {/* Colonne Marque */}
           <div className="col-span-1 md:col-span-1">
-            <div className="flex items-center gap-2 text-blue-600 mb-4">
-              <div className="bg-blue-600 text-white p-1.5 rounded-lg">
-                <Package size={20} />
-              </div>
-              <span className="font-bold text-xl tracking-tight">E-Shop</span>
-            </div>
-            <p className="text-slate-500 text-sm leading-relaxed">
-              La destination numéro 1 pour les passionnés de technologie. Qualité garantie et service client premium.
+            <Link to="/" className="text-2xl font-serif font-black text-white tracking-widest mb-6 block hover:opacity-80 transition-opacity">
+              EMPIRE.
+            </Link>
+            <p className="text-sm leading-relaxed max-w-xs font-light">
+              L'excellence à portée de main. Découvrez une sélection exclusive de produits qui redéfinissent les standards du luxe et de la technologie.
             </p>
           </div>
-
-          {/* Colonne Liens */}
+          
+          {/* Colonne Boutique */}
           <div>
-            <h3 className="font-bold text-slate-900 mb-4">Navigation</h3>
-            <ul className="space-y-2 text-sm text-slate-500">
-              <li><a href="#" className="hover:text-blue-600 transition-colors">Nouveautés</a></li>
-              <li><a href="#" className="hover:text-blue-600 transition-colors">Meilleures Ventes</a></li>
-              <li><a href="#" className="hover:text-blue-600 transition-colors">Promotions</a></li>
-              <li><a href="#" className="hover:text-blue-600 transition-colors">Cartes Cadeaux</a></li>
+            <h4 className="text-white font-bold uppercase tracking-widest text-xs mb-6">Boutique</h4>
+            <ul className="space-y-4 text-sm font-medium">
+              <li><Link to="/" className="hover:text-white transition-colors">Accueil</Link></li>
+              <li><Link to="/" onClick={() => setTimeout(() => document.getElementById('shop')?.scrollIntoView({behavior:'smooth'}), 100)} className="hover:text-white transition-colors">Catalogue</Link></li>
+              <li><Link to="/" onClick={() => setTimeout(() => document.getElementById('shop')?.scrollIntoView({behavior:'smooth'}), 100)} className="hover:text-white transition-colors">Best-sellers</Link></li>
             </ul>
           </div>
 
-          {/* Colonne Aide */}
+          {/* Colonne Support */}
           <div>
-            <h3 className="font-bold text-slate-900 mb-4">Service Client</h3>
-            <ul className="space-y-2 text-sm text-slate-500">
-              <li><a href="#" className="hover:text-blue-600 transition-colors">Contactez-nous</a></li>
-              <li><a href="#" className="hover:text-blue-600 transition-colors">Livraison & Retours</a></li>
-              <li><a href="#" className="hover:text-blue-600 transition-colors">FAQ</a></li>
-              <li><a href="#" className="hover:text-blue-600 transition-colors">Mentions Légales</a></li>
+            <h4 className="text-white font-bold uppercase tracking-widest text-xs mb-6">Support</h4>
+            <ul className="space-y-4 text-sm font-medium">
+              <li><Link to="/shipping" className="hover:text-white transition-colors">Livraison & Retours</Link></li>
+              <li><a href="mailto:contact@empire.com" className="hover:text-white transition-colors">Contact</a></li>
+              <li><Link to="/dashboard" className="hover:text-white transition-colors text-yellow-600">Espace Admin</Link></li>
             </ul>
           </div>
 
-          {/* Colonne Newsletter */}
+          {/* Colonne Légal */}
           <div>
-            <h3 className="font-bold text-slate-900 mb-4">Restez informé</h3>
-            <p className="text-sm text-slate-500 mb-4">Recevez nos offres exclusives.</p>
-            <div className="flex gap-2">
-              <input type="email" placeholder="Email" className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              <button className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800">OK</button>
-            </div>
+            <h4 className="text-white font-bold uppercase tracking-widest text-xs mb-6">Légal</h4>
+            <ul className="space-y-4 text-sm font-medium">
+              <li><Link to="/legal" className="hover:text-white transition-colors">Mentions Légales</Link></li>
+              <li><Link to="/terms" className="hover:text-white transition-colors">CGV</Link></li>
+              <li><Link to="/privacy" className="hover:text-white transition-colors">Confidentialité</Link></li>
+            </ul>
           </div>
         </div>
-
-        <div className="border-t border-slate-100 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-sm text-slate-400">© 2024 E-Shop Empire. Tous droits réservés.</p>
-          <div className="flex gap-6 text-slate-400">
-            <Facebook size={20} className="hover:text-blue-600 cursor-pointer transition-colors" />
-            <Twitter size={20} className="hover:text-blue-400 cursor-pointer transition-colors" />
-            <Instagram size={20} className="hover:text-pink-600 cursor-pointer transition-colors" />
-            <Linkedin size={20} className="hover:text-blue-700 cursor-pointer transition-colors" />
+        
+        {/* Copyright & Réseaux */}
+        <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-xs font-medium uppercase tracking-wider text-gray-500">
+          <p>© 2025 Empire Inc. Paris • New York • Tokyo</p>
+          <div className="flex gap-6">
+            <span className="hover:text-white cursor-pointer transition-colors">Instagram</span>
+            <span className="hover:text-white cursor-pointer transition-colors">Twitter</span>
+            <span className="hover:text-white cursor-pointer transition-colors">LinkedIn</span>
           </div>
         </div>
       </div>

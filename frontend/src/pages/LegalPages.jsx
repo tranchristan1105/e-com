@@ -68,56 +68,6 @@ const LegalLayout = ({ title, date, icon: Icon, children }) => {
           </div>
         </div>
       </div>
-
-      {/* FOOTER PRINCIPAL (Le même que sur la HomePage) */}
-      <footer className="bg-black text-gray-400 py-16 border-t border-gray-800 mt-auto">
-        <div className="container mx-auto px-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
-            <div className="col-span-1 md:col-span-1">
-              <div className="text-2xl font-black text-white tracking-widest mb-6">EMPIRE.</div>
-              <p className="text-sm leading-relaxed max-w-xs">
-                L'excellence à portée de main. Découvrez une sélection exclusive de produits qui redéfinissent les standards du luxe et de la technologie.
-              </p>
-            </div>
-            
-            <div>
-              <h4 className="text-white font-bold uppercase tracking-widest text-xs mb-6">Boutique</h4>
-              <ul className="space-y-4 text-sm">
-                <li><Link to="/" className="hover:text-white transition-colors">Accueil</Link></li>
-                <li><Link to="/#shop" className="hover:text-white transition-colors">Nouveautés</Link></li>
-                <li><Link to="/#shop" className="hover:text-white transition-colors">Best-sellers</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="text-white font-bold uppercase tracking-widest text-xs mb-6">Support</h4>
-              <ul className="space-y-4 text-sm">
-                <li><Link to="/shipping" className="hover:text-white transition-colors">Livraison & Retours</Link></li>
-                <li><a href="mailto:contact@empire.com" className="hover:text-white transition-colors">Contact</a></li>
-                <li><Link to="/dashboard" className="hover:text-white transition-colors text-blue-500">Espace Admin</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="text-white font-bold uppercase tracking-widest text-xs mb-6">Légal</h4>
-              <ul className="space-y-4 text-sm">
-                <li><Link to="/legal" className="hover:text-white transition-colors">Mentions Légales</Link></li>
-                <li><Link to="/terms" className="hover:text-white transition-colors">CGV</Link></li>
-                <li><Link to="/privacy" className="hover:text-white transition-colors">Confidentialité</Link></li>
-              </ul>
-            </div>
-          </div>
-          
-          <div className="pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4 text-xs">
-            <p>© 2025 Empire Inc. Tous droits réservés.</p>
-            <div className="flex gap-6">
-              <span className="hover:text-white cursor-pointer transition-colors">Instagram</span>
-              <span className="hover:text-white cursor-pointer transition-colors">Twitter</span>
-              <span className="hover:text-white cursor-pointer transition-colors">LinkedIn</span>
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 };
