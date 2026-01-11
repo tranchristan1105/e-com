@@ -146,7 +146,7 @@ const HomePage = () => {
       <section className="relative h-screen flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 z-0">
           <img 
-            src="https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?q=80&w=2070&auto=format&fit=crop" 
+            src="https://i.imgur.com/Vs7aq8I.jpeg" 
             alt="Dark Kitchen" 
             className="w-full h-full object-cover opacity-30 scale-105 animate-[pulse_15s_ease-in-out_infinite]"
           />
@@ -216,7 +216,7 @@ const HomePage = () => {
 
                 {/* La Solution */}
                 <div className="relative group rounded-2xl overflow-hidden border border-green-900/30 shadow-[0_0_50px_rgba(34,197,94,0.1)]">
-                    <img src="https://images.unsplash.com/photo-1628103598586-b4d216f40396?q=80&w=800" className="w-full h-80 object-cover" alt="Planche Titane"/>
+                    <img src="https://i.imgur.com/PiNTcwf.jpeg" className="w-full h-80 object-cover" alt="Planche Titane"/>
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40">
                         <CheckCircle size={64} className="text-green-500 mb-4 drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]" />
                         <h3 className="text-2xl font-bold text-white mb-2">LA PLANCHE TITAN™</h3>

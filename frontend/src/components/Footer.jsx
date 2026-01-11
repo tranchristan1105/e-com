@@ -32,7 +32,6 @@ const Footer = () => {
             <ul className="space-y-4 text-sm font-medium">
               <li><Link to="/shipping" className="hover:text-white transition-colors">Livraison & Retours</Link></li>
               <li><a href="mailto:contact@empire.com" className="hover:text-white transition-colors">Contact</a></li>
-              <li><Link to="/dashboard" className="hover:text-white transition-colors text-yellow-600">Espace Admin</Link></li>
             </ul>
           </div>
 
