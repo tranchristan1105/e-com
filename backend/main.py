@@ -30,7 +30,7 @@ RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
-print(f"👀 CONFIG : Admin={ADMIN_USERNAME}", flush=True)
+print(f"👀 CONFIG : Admin={ADMIN_USERNAME}, Resend={'OK' if RESEND_API_KEY else 'MANQUANT'}", flush=True)
 print(f"🌍 FRONTEND : {FRONTEND_URL}", flush=True)
 print(f"🗄️ DATABASE : {'POSTGRES' if DATABASE_URL else 'SQLITE'}", flush=True)
 print("#" * 50 + "\n", flush=True)
@@ -118,7 +118,7 @@ class ReviewModel(Base):
 class OrderModel(Base):
     __tablename__ = "orders"
     id = Column(Integer, primary_key=True, index=True)
-    stripe_id = Column(String)
+    stripe_id = Column(String, index=True) # Ajout index pour perf
     customer_email = Column(String)
     customer_name = Column(String, nullable=True)
     total_amount = Column(Float)
@@ -407,7 +407,7 @@ def create_review(id: int, r: ReviewCreateSchema, db: Session = Depends(get_db))
 @app.post("/api/v1/analytics")
 @app.post("/api/v1/activity")
 def track(e: AnalyticsSchema, db: Session = Depends(get_db)):
-    # Pas de log verbeux pour alléger
+    print(f"📥 Tracking reçu: {e.event_type} - {e.page_url}", flush=True)
     try:
         db.add(
             EventModel(
@@ -419,43 +419,37 @@ def track(e: AnalyticsSchema, db: Session = Depends(get_db)):
         )
         db.commit()
         return {"status": "ok"}
-    except Exception:
-        return {"status": "error"}
+    except Exception as err:
+        print(f"❌ Erreur DB Tracking: {err}", flush=True)
+        return {"status": "error", "detail": str(err)}
 
 
-# 👇 CORRECTION MAJEURE ICI : CALCUL DES STATS SUR LES COMMANDES RÉELLES 👇
 @app.get("/api/v1/analytics/stats")
 def get_analytics_stats(db: Session = Depends(get_db), u: AdminUser = Depends(get_current_user)):
     try:
-        # 1. Chiffres Globaux
         total_events = db.query(EventModel).count()
         orders_count = db.query(OrderModel).count()
-        # On somme les montants, si vide on met 0
         total_sales = db.query(func.sum(OrderModel.total_amount)).scalar() or 0.0
 
-        # 2. Graphique des Ventes (Basé sur la table ORDERS)
+        visits = db.query(EventModel).filter(EventModel.event_type == 'page_view').count()
+        interest = db.query(EventModel).filter(EventModel.event_type == 'view_item').count()
+        carts = db.query(EventModel).filter(EventModel.event_type == 'add_to_cart').count()
+
         today = datetime.now()
         chart_30 = { (today - timedelta(days=i)).strftime("%Y-%m-%d"): 0 for i in range(29, -1, -1) }
         chart_7 = { (today - timedelta(days=i)).strftime("%Y-%m-%d"): 0 for i in range(6, -1, -1) }
         
-        all_orders = db.query(OrderModel).all()
-        for o in all_orders:
-            # Sécurité pour la date (String ISO ou Objet Datetime selon DB)
+        orders = db.query(OrderModel).all()
+        for o in orders:
             d_str = str(o.created_at)[:10] 
             if d_str in chart_30:
                 chart_30[d_str] += (o.total_amount or 0)
             if d_str in chart_7:
                 chart_7[d_str] += (o.total_amount or 0)
 
-        # 3. Tunnel de Conversion (Compte simple des events)
-        visits = db.query(EventModel).filter(EventModel.event_type == 'page_view').count()
-        interest = db.query(EventModel).filter(EventModel.event_type == 'view_item').count()
-        carts = db.query(EventModel).filter(EventModel.event_type == 'add_to_cart').count()
-
-        # 4. Top Produits (Basé sur les events 'view_item')
         top_products = {}
         try:
-            view_events = db.query(EventModel).filter(EventModel.event_type == 'view_item').limit(1000).all()
+            view_events = db.query(EventModel).filter(EventModel.event_type == 'view_item').limit(500).all()
             for ev in view_events:
                 if ev.metadata_json:
                     meta = json.loads(ev.metadata_json)
@@ -463,7 +457,7 @@ def get_analytics_stats(db: Session = Depends(get_db), u: AdminUser = Depends(ge
                     top_products[name] = top_products.get(name, 0) + 1
             top_products = dict(sorted(top_products.items(), key=lambda item: item[1], reverse=True)[:5])
         except Exception:
-            pass # Si ça rate, on renvoie vide, pas grave
+            pass
 
         return {
             "summary": {
@@ -485,7 +479,6 @@ def get_analytics_stats(db: Session = Depends(get_db), u: AdminUser = Depends(ge
         }
     except Exception as e:
         print(f"❌ CRITICAL STATS ERROR: {e}")
-        # En cas de pépin majeur, on renvoie une structure vide valide pour ne pas casser le frontend
         return {
             "summary": {
                 "total_sales": 0, "total_orders": 0, "total_events": 0,
@@ -520,6 +513,21 @@ def get_orders(db: Session = Depends(get_db), u: AdminUser = Depends(get_current
         )
     return res
 
+# 👇 C'EST LA ROUTE QUI MANQUAIT POUR LA PAGE SUCCESS 👇
+@app.get("/api/v1/orders/by-session/{session_id}")
+def get_order_by_session(session_id: str, db: Session = Depends(get_db)):
+    order = db.query(OrderModel).filter(OrderModel.stripe_id == session_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Commande non trouvée")
+    
+    return {
+        "id": order.id,
+        "total": order.total_amount,
+        "date": order.created_at,
+        "status": order.status
+    }
+# 👆 --------------------------------------------- 👆
+
 
 # --- STRIPE ---
 
@@ -545,7 +553,8 @@ def checkout(cart: CheckoutSchema):
         payment_method_types=["card"],
         line_items=l_items,
         mode="payment",
-        success_url=f"{FRONTEND_URL}/success",
+        # Ajout du paramètre session_id pour la redirection
+        success_url=f"{FRONTEND_URL}/success?session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{FRONTEND_URL}/cancel",
         shipping_address_collection={"allowed_countries": ["FR"]},
         metadata={"items_summary": json.dumps([f"{i.name}" for i in cart.items])},
